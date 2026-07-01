@@ -1,0 +1,98 @@
+﻿{
+  "version": "0.1.0",
+  "comment": "MCU_TRACE 内置规则。GUI 配置面板可覆盖用户级配置。",
+
+  "keyword_rules": [
+    {"pattern": "HardF|hard fault|Trace_BackupMcuRegContext_VaildationCheck", "category": "fault",      "severity": "critical"},
+    {"pattern": "RST TYPE\\[|RESETREASON_",                                    "category": "reset",      "severity": "high"},
+    {"pattern": "WDG|watchdog|WatchDog",                                        "category": "watchdog",   "severity": "high"},
+    {"pattern": "VoltDet.*(UV|OV|under|over).*[Vv]oltage",                     "category": "voltage",    "severity": "high"},
+    {"pattern": "HardF.*(failed|error|fault)",                                 "category": "fault",      "severity": "critical"},
+    {"pattern": "VEHICLE_CFG.*(0x[2-9]|fail|error)",                           "category": "comm",       "severity": "high"},
+    {"pattern": "DIPC.*err|err.*DIPC",                                         "category": "comm",       "severity": "medium"},
+    {"pattern": "MIPC.*err|err.*MIPC",                                         "category": "comm",       "severity": "medium"},
+    {"pattern": "retry:|RETRY:",                                               "category": "retry",      "severity": "low"},
+    {"pattern": "HSE|HseFail|TAMPER",                                          "category": "hsm",        "severity": "high"}
+  ],
+
+  "voltage_extractors": [
+    {"name": "PSM Volt",     "pattern": "cur Volt is (\\d+)",                "unit": "mV", "scale": 0.001, "enabled": true},
+    {"name": "VoltDet VBAT", "pattern": "VoltDet.*VBAT=([\\d.]+)",          "unit": "V",  "scale": 1.0,   "enabled": false},
+    {"name": "VoltDet 5V0",  "pattern": "VoltDet.*5V0=([\\d.]+)",           "unit": "V",  "scale": 1.0,   "enabled": false},
+    {"name": "VoltDet 3V3",  "pattern": "VoltDet.*3V3=([\\d.]+)",           "unit": "V",  "scale": 1.0,   "enabled": false}
+  ],
+
+  "number_mappings": {
+    "soc_mode": {
+      "0": "OFF",
+      "1": "STANDBY",
+      "2": "TEMPO_ON",
+      "3": "NORMAL",
+      "4": "TEMPO_OFF",
+      "5": "STR",
+      "6": "MAX"
+    },
+    "rst_type": {
+      "0":  "RESETREASON_BATT",
+      "1":  "RESETREASON_GOTOSLEEP",
+      "2":  "RESETREASON_DA_TIMEOUT",
+      "3":  "RESETREASON_METER_TIMEOUT",
+      "4":  "RESETREASON_VOLT_ABNORMAL",
+      "5":  "RESETREASON_UPDATE",
+      "6":  "RESETREASON_SWITCH_AB",
+      "7":  "RESETREASON_DIAG_CMD",
+      "8":  "RESETREASON_DIPC_RESTORE_FACTORY",
+      "9":  "RESETREASON_MIPC_RESTORE_FACTORY",
+      "10": "RESETREASON_SHELL",
+      "11": "RESETREASON_SOC_BOOT",
+      "12": "RESETREASON_RTC_ALARM",
+      "13": "RESETREASON_HAND_SHAKE_TIMEOUT",
+      "14": "RESETREASON_Button_Reboot",
+      "15": "RESETREASON_QNX_REQ_Reboot",
+      "16": "RESETREASON_UNKNOW",
+      "17": "RESETREASON_36H_Reboot",
+      "18": "RESETREASON_MID_WAKEUP"
+    },
+    "rst_reason": {
+      "0":  "MCU_POWER_ON_RESET",
+      "1":  "MCU_FCCU_FTR_RESET",
+      "2":  "MCU_STCU_URF_RESET",
+      "3":  "MCU_MC_RGM_FRE_RESET",
+      "4":  "MCU_FXOSC_FAIL_RESET",
+      "5":  "MCU_PLL_LOL_RESET",
+      "6":  "MCU_CORE_CLK_FAIL_RESET",
+      "7":  "MCU_AIPS_PLAT_CLK_FAIL_RESET",
+      "8":  "MCU_HSE_CLK_FAIL_RESET",
+      "9":  "MCU_SYS_DIV_FAIL_RESET",
+      "10": "MCU_HSE_TMPR_RST_RESET",
+      "11": "MCU_HSE_SNVS_RST_RESET",
+      "12": "MCU_SW_DEST_RESET",
+      "13": "MCU_DEBUG_DEST_RESET",
+      "14": "MCU_F_EXR_RESET",
+      "15": "MCU_FCCU_RST_RESET",
+      "16": "MCU_ST_DONE_RESET",
+      "17": "MCU_SWT0_RST_RESET",
+      "18": "MCU_SWT1_RST_RESET",
+      "19": "MCU_JTAG_RST_RESET",
+      "20": "MCU_HSE_SWT_RST_RESET",
+      "21": "MCU_HSE_BOOT_RST_RESET",
+      "22": "MCU_SW_FUNC_RESET",
+      "23": "MCU_DEBUG_FUNC_RESET",
+      "24": "MCU_WAKEUP_REASON",
+      "25": "MCU_NO_RESET_REASON",
+      "26": "MCU_MULTIPLE_RESET_REASON",
+      "27": "MCU_RESET_UNDEFINED"
+    }
+  },
+
+  "reason_severity": {
+    "0":  "info",
+    "1":  "critical", "2":  "critical", "3":  "high",    "4":  "critical",
+    "5":  "critical", "6":  "critical", "7":  "critical", "8":  "critical",
+    "9":  "critical", "10": "critical", "11": "critical", "12": "high",
+    "13": "high",     "14": "high",     "15": "high",     "16": "info",
+    "17": "high",     "18": "high",     "19": "info",     "20": "critical",
+    "21": "critical", "22": "high",     "23": "info",     "24": "info",
+    "25": "info",     "26": "high",     "27": "high"
+  }
+}

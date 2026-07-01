@@ -1,0 +1,8 @@
+﻿{
+  "name": "SoCMode",
+  "comment": "SoC 模式独立维度跟踪（PowerMode_Soc_t 枚举）",
+  "states": ["OFF", "STANDBY", "TEMPO_ON", "NORMAL", "TEMPO_OFF", "STR", "MAX"],
+  "initial": "?",
+  "transitions": [],
+  "extract_pattern": "soc mode changed,cur\\[(\\d+)\\] last\\[(\\d+)\\]"
+}

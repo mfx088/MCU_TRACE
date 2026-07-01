@@ -1,0 +1,1837 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MCU TRACE 工具 v0.1.0</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         margin: 0; padding: 0; background: #f5f7fa; color: #1f2937; font-size: 14px; }
+  header { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 12px 20px;
+           box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+
+  /* 标签页 */
+  .tabs { display: flex; background: white; border-bottom: 1px solid #e5e7eb; padding: 0 20px; }
+  .tab { padding: 12px 20px; cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent;
+         font-size: 14px; transition: all 0.15s; }
+  .tab:hover { color: #1e3a8a; }
+  .tab.active { color: #1e3a8a; border-bottom-color: #3b82f6; font-weight: 500; }
+
+  .toolbar { background: #f9fafb; padding: 12px 20px; border-bottom: 1px solid #e5e7eb;
+             display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar button { background: #3b82f6; color: white; border: none; padding: 8px 16px;
+                    border-radius: 6px; cursor: pointer; font-size: 13px;
+                    transition: background 0.15s; }
+  .toolbar button:hover { background: #1e3a8a; }
+  .toolbar button:disabled { background: #d1d5db; cursor: not-allowed; }
+  .toolbar button.secondary { background: #6b7280; }
+  .toolbar button.secondary:hover { background: #4b5563; }
+  .toolbar input { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+                   font-size: 13px; width: 400px; }
+  .toolbar label { color: #4b5563; font-size: 12px; }
+
+  main { padding: 20px; min-height: 500px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* 状态条 */
+  #status { padding: 6px 20px; background: #1f2937; color: #d1d5db; font-size: 12px;
+            display: flex; align-items: center; gap: 8px; }
+  #status.error { background: #7f1d1d; }
+  #status.success { background: #14532d; }
+  .progress { flex: 1; height: 4px; background: #374151; border-radius: 2px; overflow: hidden; }
+  .progress-bar { height: 100%; background: #3b82f6; width: 0; transition: width 0.3s; }
+
+  /* 概览统计条（v0.2.1） */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: white;
+    padding: 14px 16px;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.06);
+    border: 1px solid #f3f4f6;
+    display: flex; align-items: center; gap: 10px;
+    transition: all 0.2s;
+  }
+  .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .stat-card .icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #dbeafe, #eff6ff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .stat-card.warn .icon { background: linear-gradient(135deg, #fed7aa, #fef3c7); }
+  .stat-card.crit .icon { background: linear-gradient(135deg, #fecaca, #fee2e2); }
+  .stat-card.ok .icon { background: linear-gradient(135deg, #a7f3d0, #d1fae5); }
+  .stat-card .label { font-size: 11px; color: #6b7280; white-space: nowrap; }
+  .stat-card .value { font-size: 20px; font-weight: 700; color: #1e3a8a; line-height: 1.2; }
+  .stat-card.warn .value { color: #f59e0b; }
+  .stat-card.crit .value { color: #ef4444; }
+  .stat-card.ok .value { color: #10b981; }
+
+  /* 卡片 */
+  .card { background: white; padding: 16px 20px; border-radius: 8px; margin-bottom: 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card h2 { margin: 0 0 12px 0; font-size: 16px; color: #1e3a8a; padding-bottom: 8px;
+             border-bottom: 1px solid #e5e7eb; }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #1e3a8a; color: white; padding: 8px; text-align: left; position: sticky; top: 0; }
+  td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+  .raw { font-family: "Cascadia Code", "Consolas", monospace; font-size: 12px; color: #4b5563; }
+  .illegal-row { background: #fef2f2; }
+  .illegal-row td { color: #dc2626; }
+  .scrollable { max-height: 400px; overflow-y: auto; }
+
+  /* 徽章 */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+           font-size: 11px; font-weight: 500; }
+  .badge-info     { background: #f3f4f6; color: #4b5563; }
+  .badge-low      { background: #d1fae5; color: #065f46; }
+  .badge-medium   { background: #fef3c7; color: #92400e; }
+  .badge-high     { background: #fed7aa; color: #9a3412; }
+  .badge-critical { background: #fecaca; color: #991b1b; }
+
+  /* v0.2.1: ECharts 容器（现代卡片） */
+  .echart-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.06);
+    margin: 16px 0;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+  .echart-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04); }
+  .echart-card-header {
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .echart-card-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .echart-card-header .meta {
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .echart-card-header .meta .pill {
+    background: rgba(255,255,255,0.2);
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .echart-card-body { padding: 8px 8px 4px 8px; }
+  .echart { width: 100%; height: 480px; }
+
+  /* 图表 tab 切换 */
+  .chart-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 12px 0 12px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .chart-tab {
+    padding: 8px 18px;
+    background: transparent;
+    border: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 500;
+    transition: all 0.15s;
+    border-bottom: 2px solid transparent;
+  }
+  .chart-tab:hover { color: #1e3a8a; background: #f3f4f6; }
+  .chart-tab.active {
+    color: #1e3a8a;
+    background: white;
+    border-bottom: 2px solid #3b82f6;
+  }
+  .chart-panel { display: none; }
+  .chart-panel.active { display: block; }
+
+  /* 设置面板 */
+  .setting-row { display: flex; align-items: center; margin-bottom: 14px; gap: 10px; }
+  .setting-row label { width: 180px; color: #4b5563; font-size: 13px; }
+  .setting-row input { flex: 1; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; }
+  .setting-row .status { padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+  .setting-row .status.ok { background: #d1fae5; color: #065f46; }
+  .setting-row .status.bad { background: #fecaca; color: #991b1b; }
+
+  /* 提示 */
+  .placeholder { color: #6b7280; text-align: center; padding: 40px; font-style: italic;
+                background: white; border-radius: 8px; }
+  .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px;
+           background: #1f2937; color: white; border-radius: 6px;
+           box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999;
+           opacity: 0; transition: opacity 0.2s; }
+  .toast.show { opacity: 1; }
+  .toast.success { background: #10b981; }
+  .toast.error { background: #ef4444; }
+
+  /* ============================================================
+   *  v0.2.2: 进度遮罩层（全屏炫酷进度）
+   * ============================================================ */
+  #progressOverlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9000;
+    display: none;
+    align-items: center; justify-content: center;
+    animation: fadeIn 0.25s ease-out;
+  }
+  #progressOverlay.show { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .progress-modal {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1);
+    width: 720px; max-width: 95vw;
+    padding: 0;
+    overflow: hidden;
+    animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px) scale(0.96); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .progress-header {
+    padding: 24px 32px 16px 32px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .progress-header .icon-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(255,255,255,0.25);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress-header h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .progress-header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+  .progress-body { display: flex; padding: 24px 32px; gap: 24px; }
+
+  /* 左侧：大圆环 + 数字 */
+  .ring-wrap {
+    flex-shrink: 0; width: 180px; height: 180px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ring-wrap svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+  .ring-track { fill: none; stroke: #f3f4f6; stroke-width: 12; }
+  .ring-progress {
+    fill: none; stroke-width: 12;
+    stroke-linecap: round;
+    stroke: url(#progressGradient);
+    transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));
+  }
+  .ring-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .ring-percent {
+    font-size: 36px; font-weight: 800;
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .ring-label { font-size: 11px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* 右侧：步骤列表 */
+  .steps-wrap { flex: 1; min-width: 0; }
+  .steps-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
+  .step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: #f9fafb;
+    border: 1px solid transparent;
+    transition: all 0.3s;
+    font-size: 13px;
+    color: #6b7280;
+  }
+  .step.done {
+    background: #f0fdf4;
+    color: #065f46;
+    border-color: #bbf7d0;
+  }
+  .step.active {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    color: #1e3a8a;
+    border-color: #93c5fd;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  }
+  .step-icon {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    background: white;
+    border: 1.5px solid #e5e7eb;
+    color: #9ca3af;
+  }
+  .step.done .step-icon { background: #10b981; color: white; border-color: #10b981; }
+  .step.active .step-icon {
+    background: #3b82f6; color: white; border-color: #3b82f6;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+  }
+  .step-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step-eta { font-size: 11px; color: #9ca3af; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+  .progress-footer {
+    padding: 12px 32px 20px 32px;
+    border-top: 1px solid #f3f4f6;
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fafbfc;
+  }
+  .progress-current-msg {
+    font-size: 12px; color: #4b5563;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .progress-current-msg::before {
+    content: ""; width: 6px; height: 6px;
+    border-radius: 50%; background: #3b82f6;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .progress-elapsed {
+    font-size: 11px; color: #6b7280;
+    font-variant-numeric: tabular-nums;
+    background: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+  }
+
+  /* 完成态特殊样式 */
+  #progressOverlay.done .progress-header {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  }
+  #progressOverlay.done .progress-header .icon-spinner {
+    animation: none;
+  }
+  #progressOverlay.done .progress-header .icon-spinner::after {
+    content: "✓"; color: white; font-size: 18px; font-weight: bold;
+  }
+  #progressOverlay.done .ring-percent {
+    background: linear-gradient(135deg, #059669, #10b981);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚗 MCU TRACE 工具 v0.2.2 — 车载 MCU 日志分析</h1>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="analyze">📊 分析</div>
+  <div class="tab" data-tab="settings">⚙️ 设置</div>
+  <div class="tab" data-tab="rules">📐 规则</div>
+  <div class="tab" data-tab="about">ℹ️ 关于</div>
+</div>
+
+<!-- 分析面板 -->
+<div class="panel active" id="panel-analyze">
+  <div class="toolbar">
+    <label>📁 .enc 目录：</label>
+    <input type="text" id="encDirInput" placeholder="选择 .enc 所在目录" />
+    <button id="pickEncBtn">浏览...</button>
+    <button id="importBtn">📥 导入并分析</button>
+    <button id="exportBtn" class="secondary" disabled>📄 导出 HTML 报告</button>
+    <button id="pickSaveBtn" class="secondary" disabled>另存为...</button>
+  </div>
+  <div id="status">就绪</div>
+  <main>
+    <div id="result" class="placeholder">点击「浏览」选 .enc 目录，或在「设置」页配置解密工具路径</div>
+  </main>
+</div>
+
+<!-- 设置面板 -->
+<div class="panel" id="panel-settings">
+  <div class="toolbar"><b>⚙️ 用户设置</b>（保存在 %APPDATA%\MCU_TRACE\config.json）</div>
+  <main>
+    <div class="card">
+      <h2>解密工具路径</h2>
+      <div class="setting-row">
+        <label>hsaedecrypt.exe 路径：</label>
+        <input type="text" id="decryptPathInput" />
+        <span id="decryptStatus" class="status"></span>
+        <button id="checkDecryptBtn">检查</button>
+      </div>
+      <div class="setting-row">
+        <label>默认 logd 目录：</label>
+        <input type="text" id="logdDirInput" placeholder="可选：常用 .enc 目录（点击分析页浏览时默认到这里）" />
+      </div>
+    </div>
+    <div class="card">
+      <h2>高级</h2>
+      <div class="setting-row">
+        <label>主题：</label>
+        <select id="themeSelect">
+          <option value="light">浅色</option>
+          <option value="dark">深色（v0.2）</option>
+        </select>
+      </div>
+    </div>
+    <div style="text-align: right; margin-top: 16px;">
+      <button id="saveSettingsBtn" style="background: #10b981;">💾 保存</button>
+    </div>
+  </main>
+</div>
+
+<!-- 规则面板 (v0.2+) -->
+<div class="panel" id="panel-rules">
+  <div class="toolbar">
+    <b>📐 自定义规则</b>
+    <span style="color:#6b7280; font-size:12px; margin-left:10px;">
+      保存于 <code id="userRulesPathLabel">%APPDATA%\MCU_TRACE\user_rules.json</code>
+    </span>
+    <span id="rulesStatus" class="badge badge-info" style="margin-left:10px;">未加载</span>
+  </div>
+  <main>
+    <!-- 子标签 -->
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <button class="rule-subtab active" data-subtab="number_mappings" style="padding:6px 14px; background:#1e3a8a; color:white; border:none; border-radius:6px; cursor:pointer;">🔢 数字映射</button>
+      <button class="rule-subtab" data-subtab="keyword_rules" style="padding:6px 14px; background:#d1d5db; color:#1f2937; border:none; border-radius:6px; cursor:pointer;">🔍 关键字</button>
+      <button class="rule-subtab" data-subtab="voltage_extractors" style="padding:6px 14px; background:#d1d5db; color:#1f2937; border:none; border-radius:6px; cursor:pointer;">⚡ 电压提取器</button>
+    </div>
+
+    <!-- 数字映射 子面板 -->
+    <div class="rule-subpanel" id="rule-subpanel-number_mappings">
+      <div class="card">
+        <h2>🔢 数字映射（SoC 模式 / 复位类型 / 复位原因）</h2>
+        <p style="color:#6b7280; font-size:12px; margin:0 0 12px 0;">
+          整体覆盖 builtin 对应子命名空间。键必须为数字字符串，值为显示名称。
+        </p>
+        <div class="setting-row">
+          <label>子命名空间：</label>
+          <select id="nmSubSelect" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px;">
+            <option value="soc_mode">soc_mode</option>
+            <option value="rst_type">rst_type</option>
+            <option value="rst_reason">rst_reason</option>
+          </select>
+        </div>
+        <div id="nmTableContainer"></div>
+        <button class="secondary" id="nmAddRowBtn" style="margin-top:10px;">+ 添加映射</button>
+      </div>
+    </div>
+
+    <!-- 关键字 子面板 -->
+    <div class="rule-subpanel" id="rule-subpanel-keyword_rules" style="display:none;">
+      <div class="card">
+        <h2>🔍 关键字规则</h2>
+        <p style="color:#6b7280; font-size:12px; margin:0 0 12px 0;">
+          追加到 builtin 之后（pattern 冲突时用户规则胜出）。severity 必须在
+          <code>info/low/medium/high/critical</code> 之一。
+        </p>
+        <div id="kwTableContainer"></div>
+        <button class="secondary" id="kwAddRowBtn" style="margin-top:10px;">+ 添加关键字</button>
+      </div>
+    </div>
+
+    <!-- 电压提取器 子面板 -->
+    <div class="rule-subpanel" id="rule-subpanel-voltage_extractors" style="display:none;">
+      <div class="card">
+        <h2>⚡ 电压提取器</h2>
+        <p style="color:#6b7280; font-size:12px; margin:0 0 12px 0;">
+          追加到 builtin 之后（name 冲突时用户规则胜出）。unit 必须在 <code>mV/V</code> 之一。
+        </p>
+        <div id="vTableContainer"></div>
+        <button class="secondary" id="vAddRowBtn" style="margin-top:10px;">+ 添加提取器</button>
+      </div>
+    </div>
+
+    <!-- 操作栏 -->
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; padding:12px; background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <button id="rulesReloadBtn" class="secondary">🔄 重新加载</button>
+      <button id="rulesValidateBtn" class="secondary">🧪 校验全部</button>
+      <button id="rulesResetBuiltinBtn" class="secondary" style="background:#f59e0b;">♻️ 恢复内置默认</button>
+      <button id="rulesSaveBtn" style="background:#10b981;">💾 保存规则</button>
+    </div>
+  </main>
+</div>
+
+<!-- 关于面板 -->
+<div class="panel" id="panel-about">
+  <div class="toolbar"><b>ℹ️ 关于</b></div>
+  <main>
+    <div class="card">
+      <h2>MCU TRACE 工具 v0.2.0</h2>
+      <p><b>功能：</b>自动解析 MCU trace 日志，可视化电源管理生命周期曲线</p>
+      <p><b>核心能力：</b></p>
+      <ul>
+        <li>📥 一键导入加密 .enc 日志（自动调 hsaedecrypt 解密）</li>
+        <li>🔍 关键字 / 错误码检索 + 分类高亮</li>
+        <li>📊 PSM 电源状态机时序识别（10 状态 + 异常跳转检测）</li>
+        <li>📊 SoC 系统模式（OFF/STANDBY/STR/NORMAL）时间线</li>
+        <li>⚡ 电压时间曲线（支持自定义电压关键字正则）</li>
+        <li>🔄 MCU 复位事件提取（按硬件枚举映射）</li>
+        <li>📄 一键导出含图表 + 原始节选的 HTML 报告</li>
+      </ul>
+      <p><b>作者：</b>mafuxuan &lt;mafuxuan@example.com&gt;</p>
+      <p><b>技术栈：</b>Python 3.12 + pywebview 4 + matplotlib + ECharts 5</p>
+    </div>
+  </main>
+</div>
+
+<!-- Toast 提示 -->
+<div class="toast" id="toast"></div>
+
+<!-- 进度遮罩层 (v0.2.2) -->
+<div id="progressOverlay">
+  <div class="progress-modal">
+    <div class="progress-header">
+      <div class="icon-spinner"></div>
+      <div style="flex:1;">
+        <h2 id="progressTitle">正在分析...</h2>
+        <div class="sub" id="progressSub">导入 + 解密 + 解析 + 状态机</div>
+      </div>
+    </div>
+    <div class="progress-body">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 200 200">
+          <defs>
+            <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="100%" stop-color="#8b5cf6"/>
+            </linearGradient>
+            <linearGradient id="importGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="100%" stop-color="#06b6d4"/>
+            </linearGradient>
+            <linearGradient id="analyzeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8b5cf6"/>
+              <stop offset="100%" stop-color="#ec4899"/>
+            </linearGradient>
+            <linearGradient id="doneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#10b981"/>
+              <stop offset="100%" stop-color="#059669"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-track" cx="100" cy="100" r="90"/>
+          <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="90"
+                  stroke-dasharray="565.48" stroke-dashoffset="565.48"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-percent" id="ringPercent">0%</div>
+          <div class="ring-label" id="ringLabel">总进度</div>
+        </div>
+      </div>
+      <div class="steps-wrap">
+        <div class="steps-list" id="stepsList"></div>
+      </div>
+    </div>
+    <div class="progress-footer">
+      <div class="progress-current-msg" id="progressCurrentMsg">准备中...</div>
+      <div class="progress-elapsed" id="progressElapsed">⏱ 00:00</div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/echarts.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+
+// 懒查找 api（pywebview 在窗口 ready 后才注入 js_api）
+function getApi() {
+  if (window.pywebview && window.pywebview.api) return window.pywebview.api;
+  return null;
+}
+
+// 等 pywebviewready 事件
+window.addEventListener("pywebviewready", () => {
+  console.log("[pywebview] ready, api available");
+  init();
+});
+
+// 全局错误捕获
+window.onerror = (msg, url, line, col, err) => {
+  console.error("[error]", msg, url, line, col, err);
+  const t = document.getElementById("toast");
+  if (t) {
+    t.className = "toast show error";
+    t.textContent = "JS 错误: " + msg;
+    setTimeout(() => t.classList.remove("show"), 5000);
+  }
+};
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("[unhandled]", e.reason);
+});
+
+// ============================================================
+// 标签页切换
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('panel-' + tab.dataset.tab).classList.add('active');
+  };
+});
+
+// ============================================================
+// 工具函数
+// ============================================================
+function setStatus(msg, type = "") {
+  $("status").className = type;
+  $("status").innerHTML = `<span>${msg}</span>`;
+}
+function toast(msg, type = "") {
+  const t = $("toast");
+  t.className = "toast show " + type;
+  t.textContent = msg;
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+function fmtTime(iso) {
+  if (!iso) return "-";
+  return iso.split("T")[1] || iso;
+}
+
+// ============================================================
+// v0.2.2: 全屏进度遮罩（圆形进度环 + 步骤列表 + ETA）
+// ============================================================
+const PROGRESS_STEPS = [
+  // import 阶段
+  { id: "scan",      phase: "import",  range: [0.00, 0.10], label: "扫描 .enc 文件" },
+  { id: "copy",      phase: "import",  range: [0.10, 0.30], label: "复制到解密目录" },
+  { id: "decrypt",   phase: "import",  range: [0.30, 0.40], label: "调用 hsaedecrypt 解密" },
+  { id: "extract",   phase: "import",  range: [0.40, 0.55], label: "解压 .dec 文件" },
+  { id: "organize",  phase: "import",  range: [0.55, 0.60], label: "整理 logcat 文件" },
+  // analyze 阶段
+  { id: "parse",     phase: "analyze", range: [0.60, 0.75], label: "解析 mcu_trace 事件" },
+  { id: "psm",       phase: "analyze", range: [0.75, 0.85], label: "PSM 状态机跟踪" },
+  { id: "soc",       phase: "analyze", range: [0.85, 0.88], label: "SoC 模式跟踪" },
+  { id: "voltage",   phase: "analyze", range: [0.88, 0.92], label: "电压提取" },
+  { id: "reset",     phase: "analyze", range: [0.92, 0.95], label: "复位事件" },
+  { id: "keyword",   phase: "analyze", range: [0.95, 1.00], label: "关键字扫描" },
+];
+
+const _RING_CIRC = 2 * Math.PI * 90; // r=90
+
+function _progressFindStep(p) {
+  return PROGRESS_STEPS.find(s => p >= s.range[0] && p < s.range[1]) || PROGRESS_STEPS[PROGRESS_STEPS.length - 1];
+}
+
+function _renderSteps() {
+  const list = $("stepsList");
+  if (list.children.length !== PROGRESS_STEPS.length) {
+    list.innerHTML = PROGRESS_STEPS.map((s, i) =>
+      `<div class="step" data-step-id="${s.id}" data-idx="${i}">
+        <div class="step-icon">${i + 1}</div>
+        <div class="step-text">${s.label}</div>
+        <div class="step-eta"></div>
+      </div>`
+    ).join("");
+  }
+}
+
+function _setStepState(stepId, state) {
+  const el = document.querySelector(`.step[data-step-id="${stepId}"]`);
+  if (!el) return;
+  el.classList.remove("active", "done");
+  if (state === "active") {
+    el.classList.add("active");
+    el.querySelector(".step-icon").textContent = "●";
+  } else if (state === "done") {
+    el.classList.add("done");
+    el.querySelector(".step-icon").textContent = "✓";
+  } else {
+    el.querySelector(".step-icon").textContent = el.dataset.idx
+      ? String(parseInt(el.dataset.idx) + 1) : "·";
+  }
+}
+
+let _progressStartTime = 0;
+let _progressTimer = null;
+let _progressLastStep = null;
+let _progressLastP = 0;
+
+function _progressShow() {
+  _renderSteps();
+  // 重置所有 step
+  PROGRESS_STEPS.forEach(s => _setStepState(s.id, "pending"));
+  $("progressOverlay").classList.add("show");
+  $("progressOverlay").classList.remove("done");
+  $("ringProgress").classList.remove("phase-import", "phase-analyze", "phase-done");
+  $("ringPercent").textContent = "0%";
+  $("ringLabel").textContent = "总进度";
+  $("ringProgress").setAttribute("stroke-dashoffset", _RING_CIRC);
+  $("progressCurrentMsg").textContent = "准备中...";
+  $("progressTitle").textContent = "正在分析...";
+  $("progressSub").textContent = "导入 + 解密 + 解析 + 状态机";
+  _progressStartTime = Date.now();
+  _progressLastStep = null;
+  _progressLastP = 0;
+  // elapsed timer
+  if (_progressTimer) clearInterval(_progressTimer);
+  _progressTimer = setInterval(() => {
+    const sec = Math.floor((Date.now() - _progressStartTime) / 1000);
+    const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+    const ss = String(sec % 60).padStart(2, "0");
+    $("progressElapsed").textContent = `⏱ ${mm}:${ss}`;
+  }, 250);
+}
+
+function _progressHide(delayMs = 600) {
+  if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+  setTimeout(() => {
+    $("progressOverlay").classList.remove("show");
+  }, delayMs);
+}
+
+function _progressUpdate(p, msg, phase) {
+  if (!$("progressOverlay").classList.contains("show")) return;
+  p = Math.max(0, Math.min(1, p));
+  $("ringProgress").setAttribute("stroke-dashoffset", _RING_CIRC * (1 - p));
+  $("ringPercent").textContent = Math.round(p * 100) + "%";
+  // 阶段切换
+  let ringPhaseClass = "phase-import";
+  let title = "正在导入...";
+  let sub = "扫描 + 复制 + 解密 + 解压 + 整理";
+  if (p >= 0.6 && p < 1.0) { ringPhaseClass = "phase-analyze"; title = "正在分析..."; sub = "解析 + 状态机 + 电压 + 复位 + 关键字"; }
+  else if (p >= 1.0) { ringPhaseClass = "phase-done"; title = "分析完成"; sub = "渲染结果..."; }
+  $("ringProgress").classList.remove("phase-import", "phase-analyze", "phase-done");
+  $("ringProgress").classList.add(ringPhaseClass);
+  $("progressTitle").textContent = title;
+  $("progressSub").textContent = sub;
+
+  // 步骤状态
+  const cur = _progressFindStep(p);
+  if (cur && cur.id !== _progressLastStep) {
+    if (_progressLastStep) {
+      // 上一标记为 done
+      const prev = PROGRESS_STEPS.find(s => s.id === _progressLastStep);
+      if (prev) _setStepState(prev.id, "done");
+    }
+    _setStepState(cur.id, "active");
+    _progressLastStep = cur.id;
+  }
+  // 当前任务消息
+  $("progressCurrentMsg").textContent = msg || (cur ? cur.label : "处理中...");
+
+  // done
+  if (p >= 1.0) {
+    // 全部 done
+    PROGRESS_STEPS.forEach(s => _setStepState(s.id, "done"));
+    $("progressOverlay").classList.add("done");
+    if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+  }
+  _progressLastP = p;
+}
+
+// 暴露给后端 evaluate_js 调用
+window.__mcuTraceUpdateProgress = function (payload) {
+  try { _progressUpdate(payload.p, payload.msg, payload.phase); } catch (e) { console.error("progress update failed", e); }
+};
+window.__mcuTraceShowProgress = _progressShow;
+window.__mcuTraceHideProgress = _progressHide;
+
+// ============================================================
+// 初始化
+// ============================================================
+async function init() {
+  const api = getApi();
+  if (!api) { console.warn("api not ready, waiting"); return; }
+
+  try {
+    const v = await api.get_version();
+    setStatus(`MCU TRACE v${v} | 就绪`);
+    // 加载配置
+    const cfg = await api.get_config();
+    $("decryptPathInput").value = cfg.decrypt_tool_path || "";
+    $("logdDirInput").value = cfg.default_logd_dir || "";
+    $("themeSelect").value = cfg.theme || "light";
+    // 检查解密工具
+    checkDecryptStatus();
+  } catch (e) {
+    setStatus("API 不可用: " + e, "error");
+  }
+}
+
+async function checkDecryptStatus() {
+  const api = getApi();
+  if (!api) { console.warn("api not ready"); return; }
+  try {
+    const result = await api.check_decrypt_tool();
+    const status = $("decryptStatus");
+    if (result.exists) {
+      status.textContent = "✓ 路径有效";
+      status.className = "status ok";
+    } else {
+      status.textContent = "✗ 文件不存在";
+      status.className = "status bad";
+    }
+  } catch (e) {
+    console.error("check_decrypt_tool error", e);
+  }
+}
+
+// ============================================================
+// 文件选择
+// ============================================================
+$("pickEncBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) { toast("API 还没准备好，请稍后再试", "error"); return; }
+  const r = await api.pick_file("directory");
+  if (r.path) {
+    $("encDirInput").value = r.path;
+  } else if (r.error) {
+    toast("选择失败: " + r.error, "error");
+  }
+};
+
+$("pickSaveBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) { toast("API 还没准备好，请稍后再试", "error"); return; }
+  const r = await api.pick_file("save_file");
+  if (r.path) {
+    const workDir = currentWorkDir;
+    if (!workDir) { toast("请先导入并分析", "error"); return; }
+    const result = await api.export_html(workDir, r.path);
+    if (result.ok) {
+      toast(`✓ 报告已导出: ${result.path} (${(result.size / 1024).toFixed(1)} KB)`, "success");
+    } else {
+      toast("导出失败: " + result.error, "error");
+    }
+  }
+};
+
+// ============================================================
+// 导入 + 分析
+// ============================================================
+let currentWorkDir = null;
+let currentSession = null;
+
+$("importBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) { toast("API 还没准备好，请稍后再试", "error"); return; }
+  const p = $("encDirInput").value.trim();
+  if (!p) { toast("请先选择 .enc 目录", "error"); return; }
+  // 显示炫酷进度遮罩
+  if (typeof window.__mcuTraceShowProgress === "function") {
+    window.__mcuTraceShowProgress();
+  }
+  setStatus("🔐 导入 + 解密 + 分析中（首次可能需 1-3 分钟）...");
+  // 禁用按钮防止重复点
+  $("importBtn").disabled = true;
+  try {
+    const result = await api.import_and_analyze(p);
+    if (result.error) {
+      if (typeof window.__mcuTraceHideProgress === "function") window.__mcuTraceHideProgress(0);
+      toast(result.error, "error");
+      setStatus("出错: " + result.error, "error");
+      $("importBtn").disabled = false;
+      return;
+    }
+    currentWorkDir = result.work_dir;
+    currentSession = result.session;
+    render(result.session);
+    $("exportBtn").disabled = false;
+    $("pickSaveBtn").disabled = false;
+    setStatus(`✅ 分析完成：${result.session.stats.mcu_trace_events} 条事件`, "success");
+    toast("分析完成");
+    // 完成后短暂停留再隐藏进度
+    if (typeof window.__mcuTraceHideProgress === "function") window.__mcuTraceHideProgress(900);
+  } catch (e) {
+    if (typeof window.__mcuTraceHideProgress === "function") window.__mcuTraceHideProgress(0);
+    toast("异常: " + e, "error");
+    setStatus("异常: " + e, "error");
+  } finally {
+    $("importBtn").disabled = false;
+  }
+};
+
+$("exportBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) { toast("API 还没准备好，请稍后再试", "error"); return; }
+  if (!currentWorkDir) { toast("请先导入并分析", "error"); return; }
+  const cfg = await api.get_config();
+  const workDir = currentWorkDir;
+  const sessionName = (currentSession && currentSession.name) || "session";
+  const defaultName = sessionName + "_report.html";
+  const r = await api.pick_file("save_file");
+  if (r.path) {
+    const result = await api.export_html(workDir, r.path);
+    if (result.ok) {
+      toast(`✓ 报告已导出: ${result.path} (${(result.size / 1024).toFixed(1)} KB)`, "success");
+    } else {
+      toast("导出失败: " + result.error, "error");
+    }
+  }
+};
+
+// ============================================================
+// 渲染结果
+// ============================================================
+function render(session) {
+  const stats = session.stats || {};
+  const illegalCount = stats.fsm_illegal || 0;
+  const voltagePoints = session.voltage_points || [];
+  const fsmTrans = session.fsm_transitions || [];
+  const rstEvents = session.rst_events || [];
+  const kwHits = session.keyword_hits || [];
+  const psmTrans = fsmTrans.filter(t => t.fsm_name === "PSM");
+  const socTrans = fsmTrans.filter(t => t.fsm_name === "SoCMode");
+  const events = session.events || [];
+
+  // TL;DR
+  const tldrItems = [];
+  if (illegalCount > 0) tldrItems.push(`<li style="color:#ea580c;">⚠️ ${illegalCount} 次状态机异常跳转</li>`);
+  if (rstEvents.length > 0) tldrItems.push(`<li style="color:#f59e0b;">🔄 ${rstEvents.length} 次 MCU 复位</li>`);
+  const critKw = kwHits.filter(k => (k.severity || 0) >= 4).length;
+  if (critKw > 0) tldrItems.push(`<li style="color:#dc2626;">🚨 ${critKw} 个严重故障</li>`);
+  const highKw = kwHits.filter(k => (k.severity || 0) === 3).length;
+  if (highKw > 0) tldrItems.push(`<li style="color:#f59e0b;">🟠 ${highKw} 个高级告警</li>`);
+  const tldrHtml = tldrItems.length > 0
+    ? `<ul style="margin: 8px 0 0 0; padding-left: 24px;">${tldrItems.join("")}</ul>`
+    : `<p style="color: #065f46; font-weight: 500;">✅ 一切正常</p>`;
+
+  // 状态名映射（GUI 端简化版）
+  const PSM_CN = {
+    "PreStandby": "预待机", "Standby": "待机", "Normal": "正常运行",
+    "PrepareSleep_Step1": "准备休眠", "PreSleep_1": "预休眠-1", "PreSleep_2": "预休眠-2",
+    "WatiEvnShutDown": "等待关闭", "WakeUp": "唤醒中", "StartUp_1": "启动中-1", "StartUp_2": "启动中-2",
+    "OFF": "关机"
+  };
+  const SOC_CN = {
+    "OFF": "SoC 关机", "STANDBY": "SoC 待机", "TEMPO_ON": "SoC 暂态开机",
+    "NORMAL": "SoC 正常运行", "TEMPO_OFF": "SoC 暂态关机", "STR": "SoC 深度休眠", "MAX": "SoC 上限"
+  };
+  const CAT_CN = {
+    "fault": "🚨 故障", "reset": "🔄 复位", "watchdog": "⏰ 看门狗",
+    "voltage": "⚡ 电压", "comm": "📡 通信", "hsm": "🔐 安全引擎", "retry": "🔁 重试"
+  };
+  const SEV_CN = ["信息", "低", "中", "高", "严重"];
+  const SEV_COLOR = ["#6b7280", "#10b981", "#eab308", "#f97316", "#ef4444"];
+
+  let html = `
+    <!-- TL;DR -->
+    <div class="card" style="background: linear-gradient(135deg, #fffbeb, #fef3c7); border-left: 4px solid #f59e0b;">
+      <h2>📌 一句话总结</h2>
+      <p><b>数据：</b>${stats.mcu_trace_events || 0} 条 mcu_trace 事件 &nbsp;|&nbsp;
+         <b>源文件：</b>${stats.source_files || 0} 个 &nbsp;|&nbsp;
+         <b>时间范围：</b>${(session.stats.time_range[0] || "?").split("T")[1] || "?"} ~ ${(session.stats.time_range[1] || "?").split("T")[1] || "?"}</p>
+      ${tldrHtml}
+    </div>
+
+    <!-- 概览统计 -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="icon">📊</div>
+        <div>
+          <div class="label">事件</div>
+          <div class="value">${stats.mcu_trace_events || 0}</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">📁</div>
+        <div>
+          <div class="label">源文件</div>
+          <div class="value">${stats.source_files || 0}</div>
+        </div>
+      </div>
+      <div class="stat-card ${(stats.voltage_points || 0) > 0 ? 'ok' : ''}">
+        <div class="icon">⚡</div>
+        <div>
+          <div class="label">电压点</div>
+          <div class="value">${stats.voltage_points || 0}</div>
+        </div>
+      </div>
+      <div class="stat-card ${illegalCount > 0 ? 'crit' : 'ok'}">
+        <div class="icon">${illegalCount > 0 ? '🚨' : '✅'}</div>
+        <div>
+          <div class="label">非法跳转</div>
+          <div class="value">${illegalCount}</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">🔄</div>
+        <div>
+          <div class="label">状态转换</div>
+          <div class="value">${stats.fsm_transitions || 0}</div>
+        </div>
+      </div>
+      <div class="stat-card ${(stats.rst_events || 0) > 0 ? 'warn' : ''}">
+        <div class="icon">🔌</div>
+        <div>
+          <div class="label">复位</div>
+          <div class="value">${stats.rst_events || 0}</div>
+        </div>
+      </div>
+      <div class="stat-card ${(stats.keyword_hits || 0) > 0 ? 'warn' : ''}">
+        <div class="icon">🔍</div>
+        <div>
+          <div class="label">关键字</div>
+          <div class="value">${stats.keyword_hits || 0}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ECharts 图表（v0.2.1: Tabbed 视图）
+  if (typeof echarts !== "undefined") {
+    // 总共几张
+    const hasPSM = psmTrans.length > 0;
+    const hasSOC = socTrans.length > 0;
+    const hasVolt = voltagePoints.length > 0;
+    const hasAnyChart = hasPSM || hasSOC || hasVolt;
+
+    if (hasAnyChart) {
+      html += `<div class="echart-card">`;
+      // Tabs
+      html += `<div class="chart-tabs">`;
+      if (hasPSM) html += `<button class="chart-tab active" data-chart="psm">📊 MCU 电源状态 (PSM)</button>`;
+      if (hasSOC) html += `<button class="chart-tab" data-chart="soc">📊 SoC 系统模式</button>`;
+      if (hasVolt) html += `<button class="chart-tab" data-chart="volt">⚡ 整车电池电压</button>`;
+      html += `</div>`;
+
+      // PSM Panel
+      if (hasPSM) {
+        html += `<div class="chart-panel active" id="chart-panel-psm">
+          <div class="echart-card-header">
+            <h3>📊 MCU 电源状态时序</h3>
+            <div class="meta">
+              <span class="pill">${psmTrans.length} 次跳转</span>
+              <span class="pill" style="background:${illegalCount > 0 ? 'rgba(239,68,68,0.85)' : 'rgba(16,185,129,0.85)'};">${illegalCount > 0 ? `⚠ ${illegalCount} 异常` : '✓ 全合法'}</span>
+            </div>
+          </div>
+          <div class="echart-card-body">
+            <div id="echart-psm" class="echart"></div>
+          </div>
+        </div>`;
+      }
+      // SOC Panel
+      if (hasSOC) {
+        html += `<div class="chart-panel" id="chart-panel-soc">
+          <div class="echart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);">
+            <h3>📊 SoC 系统模式时序</h3>
+            <div class="meta">
+              <span class="pill">${socTrans.length} 次变化</span>
+            </div>
+          </div>
+          <div class="echart-card-body">
+            <div id="echart-soc" class="echart"></div>
+          </div>
+        </div>`;
+      }
+      // Volt Panel
+      if (hasVolt) {
+        html += `<div class="chart-panel" id="chart-panel-volt">
+          <div class="echart-card-header" style="background:linear-gradient(135deg,#0891b2,#06b6d4);">
+            <h3>⚡ 整车电池电压</h3>
+            <div class="meta">
+              <span class="pill">${voltagePoints.length} 个采样点</span>
+              <span class="pill" style="background:rgba(255,255,255,0.2);">正常 9-16V</span>
+            </div>
+          </div>
+          <div class="echart-card-body">
+            <div id="echart-volt" class="echart"></div>
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="placeholder">📊 暂无图表数据（无状态转换 / 无电压点）</div>`;
+    }
+  }
+
+  // PSM 状态转换表
+  html += `<div class="card">
+    <h2>🔄 MCU 电源状态转换（前 20 条）</h2>
+    <div class="scrollable">
+    <table>
+      <tr><th>时间</th><th>起始状态</th><th>目标状态</th><th>事件</th><th>说明</th></tr>
+      ${psmTrans.slice(0, 20).map(t => `
+        <tr class="${t.is_illegal ? 'illegal-row' : ''}">
+          <td class="raw">${fmtTime(t.timestamp)}</td>
+          <td>${PSM_CN[t.from_state] || t.from_state}</td>
+          <td>${PSM_CN[t.to_state] || t.to_state}</td>
+          <td class="raw">${t.event_id || "-"}</td>
+          <td>${t.reason || ""}</td>
+        </tr>
+      `).join("")}
+    </table>
+    </div>
+  </div>`;
+
+  // SoC 状态转换表
+  if (socTrans.length > 0) {
+    html += `<div class="card">
+      <h2>🔄 SoC 模式变化</h2>
+      <div class="scrollable">
+      <table>
+        <tr><th>时间</th><th>起始模式</th><th>目标模式</th><th>说明</th></tr>
+        ${socTrans.slice(0, 20).map(t => `
+          <tr class="${t.is_illegal ? 'illegal-row' : ''}">
+            <td class="raw">${fmtTime(t.timestamp)}</td>
+            <td>${SOC_CN[t.from_state] || t.from_state}</td>
+            <td>${SOC_CN[t.to_state] || t.to_state}</td>
+            <td>${t.reason || ""}</td>
+          </tr>
+        `).join("")}
+      </table>
+      </div>
+    </div>`;
+  }
+
+  // 复位事件
+  if (rstEvents.length > 0) {
+    html += `<div class="card">
+      <h2>🔌 MCU 复位事件</h2>
+      <table>
+        <tr><th>时间</th><th>复位类型</th><th>原因</th><th>原始</th></tr>
+        ${rstEvents.map(r => `
+          <tr>
+            <td class="raw">${fmtTime(r.timestamp)}</td>
+            <td>${r.rst_type_name}</td>
+            <td>${r.reason_name}</td>
+            <td class="raw">${r.raw || ""}</td>
+          </tr>
+        `).join("")}
+      </table>
+    </div>`;
+  }
+
+  // 关键字命中
+  if (kwHits.length > 0) {
+    html += `<div class="card">
+      <h2>🔍 关键字命中（前 30 条）</h2>
+      <div class="scrollable">
+      <table>
+        <tr><th>时间</th><th>类别</th><th>模块</th><th>严重度</th><th>命中</th><th>消息</th></tr>
+        ${kwHits.slice(0, 30).map(k => {
+          const sv = k.severity || 0;
+          return `
+            <tr>
+              <td class="raw">${fmtTime(k.timestamp)}</td>
+              <td>${CAT_CN[k.category] || k.category}</td>
+              <td>${k.module}</td>
+              <td><span class="badge" style="background: ${SEV_COLOR[sv]}20; color: ${SEV_COLOR[sv]}">${SEV_CN[sv]}</span></td>
+              <td class="raw">${k.matched_text}</td>
+              <td class="raw">${(k.message || "").slice(0, 100)}</td>
+            </tr>
+          `;
+        }).join("")}
+      </table>
+      </div>
+    </div>`;
+  }
+
+  $("result").innerHTML = html;
+
+  // 渲染 ECharts（v0.2.1: 全部预渲染 + 切换 tab 时 resize）
+  if (typeof echarts !== "undefined") {
+    const charts = [];
+    if (psmTrans.length > 0) charts.push(renderEchartsPSM(psmTrans));
+    if (socTrans.length > 0) charts.push(renderEchartsSOC(socTrans));
+    if (voltagePoints.length > 0) charts.push(renderEchartsVolt(voltagePoints));
+
+    // Tab 切换：lazy-render 后续 chart + 触发 resize
+    document.querySelectorAll('.chart-tab').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.chart-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const target = btn.dataset.chart;
+        const panel = $("chart-panel-" + target);
+        if (panel) {
+          panel.classList.add('active');
+          // 找到对应 chart 并 resize
+          const cid = "echart-" + target;
+          const inst = echarts.getInstanceByDom($(cid));
+          if (inst) inst.resize();
+        }
+      };
+    });
+  }
+}
+
+// ============================================================
+// ECharts 渲染（v0.2.1: toolbox + dataZoom + 更好配色）
+// ============================================================
+
+// 共享：HH:MM:SS 格式化
+const _fmtHMS = (d) => `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+
+function renderEchartsPSM(transitions) {
+  const chart = echarts.init($("echart-psm"));
+  // v0.2.1: 更深的色板（不再 pastel）
+  const PSM_DATA = {
+    "PreStandby":          { y: 0,  color: "#fbbf24", cn: "预待机" },
+    "Standby":             { y: 1,  color: "#2563eb", cn: "待机" },
+    "Normal":              { y: 2,  color: "#059669", cn: "正常运行" },
+    "PrepareSleep_Step1":  { y: 3,  color: "#d97706", cn: "准备休眠" },
+    "PreSleep_1":          { y: 4,  color: "#7c3aed", cn: "预休眠-1" },
+    "PreSleep_2":          { y: 5,  color: "#7c3aed", cn: "预休眠-2" },
+    "WatiEvnShutDown":      { y: 6,  color: "#dc2626", cn: "等待关闭" },
+    "WakeUp":              { y: 7,  color: "#0891b2", cn: "唤醒中" },
+    "StartUp_1":           { y: 8,  color: "#ea580c", cn: "启动中-1" },
+    "StartUp_2":           { y: 9,  color: "#ea580c", cn: "启动中-2" },
+    "OFF":                 { y: 10, color: "#374151", cn: "关机" }
+  };
+
+  const data = [];
+  const sortedTrans = [...transitions].filter(t => t.timestamp).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const baseMs = sortedTrans.length > 0 ? new Date(sortedTrans[0].timestamp).getTime() : Date.now();
+  const maxMs = sortedTrans.length > 0 ? new Date(sortedTrans[sortedTrans.length-1].timestamp).getTime() : baseMs + 60000;
+  for (let i = 0; i < sortedTrans.length; i++) {
+    const t = sortedTrans[i];
+    const startMs = new Date(t.timestamp).getTime();
+    const endMs = i + 1 < sortedTrans.length ? new Date(sortedTrans[i+1].timestamp).getTime() : startMs + 2000;
+    const dur = (endMs - startMs) / 1000;
+    if (dur > 0 && PSM_DATA[t.to_state]) {
+      data.push({
+        name: PSM_DATA[t.to_state].cn + (t.is_illegal ? " ⚠️" : ""),
+        value: [PSM_DATA[t.to_state].y, startMs, dur, dur],
+        itemStyle: {
+          color: t.is_illegal ? "#ef4444" : PSM_DATA[t.to_state].color,
+          borderRadius: 3,
+        }
+      });
+    }
+  }
+
+  const yCategories = Object.keys(PSM_DATA).map(k => PSM_DATA[k].cn);
+  const hasData = data.length > 0;
+
+  chart.setOption({
+    backgroundColor: "transparent",
+    title: hasData ? {
+      text: "MCU 电源状态时序",
+      subtext: `${data.length} 次状态跳转 · 时间窗 ${_fmtHMS(new Date(baseMs))} ~ ${_fmtHMS(new Date(maxMs))}`,
+      left: 16, top: 8,
+      textStyle: { fontSize: 13, fontWeight: 600, color: "#374151" },
+      subtextStyle: { fontSize: 11, color: "#9ca3af" },
+    } : undefined,
+    tooltip: {
+      backgroundColor: "rgba(17,24,39,0.95)",
+      borderColor: "transparent",
+      textStyle: { color: "#fff", fontSize: 12 },
+      formatter: (p) => {
+        const d = new Date(p.value[1]);
+        return `<b>${p.name}</b><br/>开始: ${_fmtHMS(d)}<br/>持续: ${p.value[2].toFixed(1)}s`;
+      }
+    },
+    toolbox: {
+      right: 16, top: 8,
+      iconStyle: { borderColor: "#6b7280" },
+      emphasis: { iconStyle: { borderColor: "#1e3a8a" } },
+      feature: {
+        saveAsImage: { title: "保存为图片", name: `psm_${new Date().toISOString().slice(0,10)}` },
+        dataView: { title: "数据视图", readOnly: true, lang: ["数据视图", "关闭", "刷新"] },
+        restore: { title: "重置" },
+      }
+    },
+    grid: { left: 90, right: 50, top: 70, bottom: 80, containLabel: false },
+    xAxis: {
+      type: "time", min: baseMs, max: maxMs,
+      axisLine: { lineStyle: { color: "#e5e7eb" } },
+      axisLabel: { color: "#6b7280", fontSize: 11, hideOverlap: true, formatter: (v) => _fmtHMS(new Date(v)) },
+      splitLine: { lineStyle: { color: "#f3f4f6" } },
+    },
+    yAxis: {
+      type: "category", data: yCategories, inverse: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: "#4b5563", fontSize: 12, fontWeight: 500 },
+    },
+    dataZoom: [
+      { type: "inside", start: 0, end: 100 },
+      { type: "slider", height: 18, bottom: 16, start: 0, end: 100,
+        borderColor: "transparent", backgroundColor: "#f9fafb",
+        fillerColor: "rgba(59,130,246,0.15)",
+        handleStyle: { color: "#3b82f6" },
+        textStyle: { color: "#6b7280", fontSize: 10 } }
+    ],
+    series: [{
+      type: "custom",
+      renderItem: (params, api) => {
+        const yIdx = api.value(0);
+        const start = api.coord([api.value(1), yIdx]);
+        const end = api.coord([api.value(1) + api.value(2) * 1000, yIdx]);
+        return {
+          type: "rect",
+          shape: { x: start[0], y: start[1] - 13, width: Math.max(end[0] - start[0], 3), height: 26, r: 3 },
+          style: api.style()
+        };
+      },
+      encode: { x: [1, 2], y: 0 },
+      data: data
+    }]
+  });
+  window.addEventListener("resize", () => chart.resize());
+  return chart;
+}
+
+function renderEchartsSOC(transitions) {
+  const chart = echarts.init($("echart-soc"));
+  const SOC_DATA = {
+    "OFF":         { y: 0, color: "#374151", cn: "SoC 关机" },
+    "STANDBY":     { y: 1, color: "#2563eb", cn: "SoC 待机" },
+    "TEMPO_ON":    { y: 2, color: "#0891b2", cn: "SoC 暂态开机" },
+    "NORMAL":      { y: 3, color: "#059669", cn: "SoC 正常运行" },
+    "TEMPO_OFF":   { y: 4, color: "#ea580c", cn: "SoC 暂态关机" },
+    "STR":         { y: 5, color: "#7c3aed", cn: "SoC 深度休眠" },
+    "MAX":         { y: 6, color: "#6b7280", cn: "SoC 上限" }
+  };
+  const data = [];
+  const sortedTrans = [...transitions].filter(t => t.timestamp).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const baseMs = sortedTrans.length > 0 ? new Date(sortedTrans[0].timestamp).getTime() : Date.now();
+  const maxMs = sortedTrans.length > 0 ? new Date(sortedTrans[sortedTrans.length-1].timestamp).getTime() : baseMs + 60000;
+  for (let i = 0; i < sortedTrans.length; i++) {
+    const t = sortedTrans[i];
+    const startMs = new Date(t.timestamp).getTime();
+    const endMs = i + 1 < sortedTrans.length ? new Date(sortedTrans[i+1].timestamp).getTime() : startMs + 2000;
+    const dur = (endMs - startMs) / 1000;
+    if (dur > 0 && SOC_DATA[t.to_state]) {
+      data.push({
+        name: SOC_DATA[t.to_state].cn + (t.is_illegal ? " ⚠️" : ""),
+        value: [SOC_DATA[t.to_state].y, startMs, dur, dur],
+        itemStyle: { color: t.is_illegal ? "#ef4444" : SOC_DATA[t.to_state].color, borderRadius: 3 }
+      });
+    }
+  }
+  const yCategories = Object.keys(SOC_DATA).map(k => SOC_DATA[k].cn);
+  const hasData = data.length > 0;
+  chart.setOption({
+    backgroundColor: "transparent",
+    title: hasData ? {
+      text: "SoC 系统模式时序",
+      subtext: `${data.length} 次模式变化`,
+      left: 16, top: 8,
+      textStyle: { fontSize: 13, fontWeight: 600, color: "#374151" },
+      subtextStyle: { fontSize: 11, color: "#9ca3af" },
+    } : undefined,
+    tooltip: {
+      backgroundColor: "rgba(17,24,39,0.95)", borderColor: "transparent",
+      textStyle: { color: "#fff", fontSize: 12 },
+      formatter: (p) => {
+        const d = new Date(p.value[1]);
+        return `<b>${p.name}</b><br/>开始: ${_fmtHMS(d)}<br/>持续: ${p.value[2].toFixed(1)}s`;
+      }
+    },
+    toolbox: {
+      right: 16, top: 8, iconStyle: { borderColor: "#6b7280" },
+      emphasis: { iconStyle: { borderColor: "#7c3aed" } },
+      feature: {
+        saveAsImage: { title: "保存为图片", name: `soc_${new Date().toISOString().slice(0,10)}` },
+        dataView: { title: "数据视图", readOnly: true, lang: ["数据视图", "关闭", "刷新"] },
+        restore: { title: "重置" },
+      }
+    },
+    grid: { left: 110, right: 50, top: 70, bottom: 80 },
+    xAxis: { type: "time", min: baseMs, max: maxMs,
+      axisLine: { lineStyle: { color: "#e5e7eb" } },
+      axisLabel: { color: "#6b7280", fontSize: 11, hideOverlap: true, formatter: (v) => _fmtHMS(new Date(v)) },
+      splitLine: { lineStyle: { color: "#f3f4f6" } },
+    },
+    yAxis: { type: "category", data: yCategories, inverse: true,
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: "#4b5563", fontSize: 12, fontWeight: 500 },
+    },
+    dataZoom: [
+      { type: "inside", start: 0, end: 100 },
+      { type: "slider", height: 18, bottom: 16, start: 0, end: 100,
+        borderColor: "transparent", backgroundColor: "#f9fafb",
+        fillerColor: "rgba(124,58,237,0.15)",
+        handleStyle: { color: "#7c3aed" }, textStyle: { color: "#6b7280", fontSize: 10 } }
+    ],
+    series: [{
+      type: "custom",
+      renderItem: (params, api) => {
+        const yIdx = api.value(0);
+        const start = api.coord([api.value(1), yIdx]);
+        const end = api.coord([api.value(1) + api.value(2) * 1000, yIdx]);
+        return { type: "rect", shape: { x: start[0], y: start[1] - 13, width: Math.max(end[0] - start[0], 3), height: 26, r: 3 }, style: api.style() };
+      },
+      encode: { x: [1, 2], y: 0 },
+      data: data
+    }]
+  });
+  window.addEventListener("resize", () => chart.resize());
+  return chart;
+}
+
+function renderEchartsVolt(points) {
+  const chart = echarts.init($("echart-volt"));
+  const sortedPoints = [...points].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const baseMs = sortedPoints.length > 0 ? new Date(sortedPoints[0].timestamp).getTime() : Date.now();
+  const maxMs = sortedPoints.length > 0 ? new Date(sortedPoints[sortedPoints.length-1].timestamp).getTime() : baseMs + 60000;
+  const data = sortedPoints.map(p => [new Date(p.timestamp).getTime(), p.value_v]);
+  const hasData = data.length > 0;
+  chart.setOption({
+    backgroundColor: "transparent",
+    title: hasData ? {
+      text: "整车电池电压",
+      subtext: `${data.length} 个采样点 · 正常 9-16V`,
+      left: 16, top: 8,
+      textStyle: { fontSize: 13, fontWeight: 600, color: "#374151" },
+      subtextStyle: { fontSize: 11, color: "#9ca3af" },
+    } : undefined,
+    tooltip: { trigger: "axis",
+      backgroundColor: "rgba(17,24,39,0.95)", borderColor: "transparent",
+      textStyle: { color: "#fff", fontSize: 12 },
+      formatter: (p) => `${_fmtHMS(new Date(p[0].value[0]))}<br/><b>${p[0].value[1].toFixed(2)} V</b>`
+    },
+    toolbox: {
+      right: 16, top: 8, iconStyle: { borderColor: "#6b7280" },
+      emphasis: { iconStyle: { borderColor: "#0891b2" } },
+      feature: {
+        saveAsImage: { title: "保存为图片", name: `volt_${new Date().toISOString().slice(0,10)}` },
+        dataView: { title: "数据视图", readOnly: true, lang: ["数据视图", "关闭", "刷新"] },
+        restore: { title: "重置" },
+      }
+    },
+    grid: { left: 60, right: 50, top: 70, bottom: 80 },
+    xAxis: { type: "time", min: baseMs, max: maxMs,
+      axisLine: { lineStyle: { color: "#e5e7eb" } },
+      axisLabel: { color: "#6b7280", fontSize: 11, hideOverlap: true, formatter: (v) => _fmtHMS(new Date(v)) },
+      splitLine: { lineStyle: { color: "#f3f4f6" } },
+    },
+    yAxis: { type: "value", name: "电压 (V)", nameTextStyle: { color: "#6b7280", fontSize: 11 },
+      nameLocation: "middle", nameGap: 45,
+      min: (v) => Math.max(0, v.min - 1.5), max: (v) => v.max + 1.5,
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: "#6b7280", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#f3f4f6" } },
+    },
+    dataZoom: [
+      { type: "inside", start: 0, end: 100 },
+      { type: "slider", height: 18, bottom: 16, start: 0, end: 100,
+        borderColor: "transparent", backgroundColor: "#f9fafb",
+        fillerColor: "rgba(8,145,178,0.15)",
+        handleStyle: { color: "#0891b2" }, textStyle: { color: "#6b7280", fontSize: 10 } }
+    ],
+    series: [{
+      type: "line",
+      data: data,
+      smooth: true,
+      symbol: "circle",
+      symbolSize: 10,
+      lineStyle: { color: "#0891b2", width: 2.5 },
+      itemStyle: { color: "#0891b2", borderColor: "#fff", borderWidth: 2 },
+      areaStyle: {
+        color: {
+          type: "linear", x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: "rgba(8,145,178,0.30)" },
+            { offset: 1, color: "rgba(8,145,178,0.02)" }
+          ]
+        }
+      },
+      markArea: {
+        silent: true,
+        itemStyle: { color: "rgba(16,185,129,0.10)" },
+        data: [[{ yAxis: 9, name: "正常范围" }, { yAxis: 16 }]]
+      },
+      markLine: {
+        silent: true, symbol: "none",
+        lineStyle: { color: "#f97316", type: "dashed", width: 1.2 },
+        label: { color: "#f97316", fontSize: 10, position: "insideEndTop" },
+        data: [
+          { yAxis: 9, name: "低压告警 9V" },
+          { yAxis: 16, name: "过压告警 16V" }
+        ]
+      },
+      markPoint: hasData ? {
+        symbol: "pin", symbolSize: 50,
+        itemStyle: { color: "#0891b2" },
+        label: { color: "#fff", fontSize: 10, fontWeight: "bold" },
+        data: data.map((d, i) => ({
+          name: `V${i+1}`,
+          value: d[1].toFixed(2),
+          coord: d,
+        }))
+      } : undefined
+    }]
+  });
+  window.addEventListener("resize", () => chart.resize());
+  return chart;
+}
+
+// ============================================================
+// 设置保存
+// ============================================================
+$("checkDecryptBtn").onclick = checkDecryptStatus;
+
+$("saveSettingsBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) { toast("API 还没准备好，请稍后再试", "error"); return; }
+  const cfg = {
+    decrypt_tool_path: $("decryptPathInput").value.trim(),
+    default_logd_dir: $("logdDirInput").value.trim(),
+    theme: $("themeSelect").value,
+  };
+  const result = await api.save_config(cfg);
+  if (result.ok) {
+    toast("✓ 设置已保存", "success");
+  } else {
+    toast("保存失败: " + result.error, "error");
+  }
+};
+
+// init() 会在 pywebviewready 事件中触发
+
+// ============================================================
+// 规则标签页 (v0.2+)
+// ============================================================
+const RULES_STATE = {
+  builtin: null,           // builtin_rules.json 完整
+  user: {                  // 当前正在编辑的 user_rules（未保存的 in-memory state）
+    number_mappings: { soc_mode: {}, rst_type: {}, rst_reason: {} },
+    keyword_rules: [],
+    voltage_extractors: [],
+  },
+  userFromDisk: null,      // 磁盘上的 user_rules（用于"是否有未保存改动"）
+  dirty: false,
+};
+
+function markDirty() {
+  RULES_STATE.dirty = true;
+  $("rulesStatus").textContent = "● 未保存";
+  $("rulesStatus").className = "badge badge-high";
+}
+
+function markClean() {
+  RULES_STATE.dirty = false;
+  $("rulesStatus").textContent = "✓ 已保存";
+  $("rulesStatus").className = "badge badge-low";
+}
+
+function markLoaded() {
+  $("rulesStatus").textContent = "已加载";
+  $("rulesStatus").className = "badge badge-info";
+  markClean();
+}
+
+// ---- 子标签切换 ----
+document.querySelectorAll('.rule-subtab').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.rule-subtab').forEach(b => {
+      b.style.background = "#d1d5db";
+      b.style.color = "#1f2937";
+    });
+    document.querySelectorAll('.rule-subpanel').forEach(p => p.style.display = "none");
+    btn.style.background = "#1e3a8a";
+    btn.style.color = "white";
+    $("rule-subpanel-" + btn.dataset.subtab).style.display = "block";
+  };
+});
+
+// ---- 数字映射 ----
+function renderNumberMappings() {
+  const sub = $("nmSubSelect").value;
+  const mapping = RULES_STATE.user.number_mappings[sub] || {};
+  const builtinMapping = (RULES_STATE.builtin?.number_mappings?.[sub]) || {};
+  const builtinKeys = Object.keys(builtinMapping);
+  const allKeys = Array.from(new Set([...builtinKeys, ...Object.keys(mapping)])).sort((a,b)=>Number(a)-Number(b));
+
+  const rows = allKeys.map(k => {
+    const userVal = mapping[k];
+    const builtinVal = builtinMapping[k];
+    const isOverride = userVal !== undefined && userVal !== builtinVal;
+    const isFromBuiltin = userVal === undefined;
+    return `
+      <tr>
+        <td style="width:80px;">
+          <code>${k}</code>
+          ${isFromBuiltin ? '<span class="badge badge-info" title="来自 builtin">B</span>' : '<span class="badge badge-medium">U</span>'}
+        </td>
+        <td>
+          <input data-nm-key="${k}" value="${(userVal !== undefined ? userVal : builtinVal) || ""}"
+                 placeholder="${builtinVal || "(空)"}" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px;" />
+        </td>
+        <td style="width:140px;">
+          ${builtinVal ? `<span style="color:#6b7280; font-size:11px;">builtin: ${builtinVal}</span>` : '<span style="color:#6b7280; font-size:11px;">（新增）</span>'}
+        </td>
+        <td style="width:60px;"><button class="secondary" data-nm-del="${k}" style="padding:3px 8px; font-size:11px;">删</button></td>
+      </tr>`;
+  }).join("");
+
+  const html = `
+    <table style="width:100%; font-size:12px;">
+      <thead><tr><th>数字</th><th>显示名称</th><th>来源</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" style="color:#6b7280; padding:14px;">（空）点 + 添加映射 新建</td></tr>'}</tbody>
+    </table>`;
+  $("nmTableContainer").innerHTML = html;
+
+  // bind input changes
+  $("nmTableContainer").querySelectorAll("[data-nm-key]").forEach(inp => {
+    inp.oninput = () => {
+      const k = inp.dataset.nmKey;
+      const v = inp.value.trim();
+      if (v) RULES_STATE.user.number_mappings[sub][k] = v;
+      else delete RULES_STATE.user.number_mappings[sub][k];
+      markDirty();
+    };
+  });
+  $("nmTableContainer").querySelectorAll("[data-nm-del]").forEach(btn => {
+    btn.onclick = () => {
+      const k = btn.dataset.nmDel;
+      delete RULES_STATE.user.number_mappings[sub][k];
+      renderNumberMappings();
+      markDirty();
+    };
+  });
+}
+
+$("nmSubSelect").onchange = renderNumberMappings;
+$("nmAddRowBtn").onclick = () => {
+  const k = prompt("新映射的数字键（例如 99）:");
+  if (!k || !/^\d+$/.test(k.trim())) { toast("键必须是数字", "error"); return; }
+  const v = prompt("显示名称:");
+  if (!v) return;
+  const sub = $("nmSubSelect").value;
+  RULES_STATE.user.number_mappings[sub][k.trim()] = v.trim();
+  renderNumberMappings();
+  markDirty();
+};
+
+// ---- 关键字规则 ----
+function renderKeywordRules() {
+  const rows = RULES_STATE.user.keyword_rules.map((r, i) => `
+    <tr>
+      <td><input data-kw-idx="${i}" data-kw-field="pattern" value="${(r.pattern||"").replace(/"/g,'&quot;')}" placeholder="MyErr\\d+" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-family:monospace;" /></td>
+      <td><input data-kw-idx="${i}" data-kw-field="category" value="${(r.category||"")}" placeholder="custom" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px;" /></td>
+      <td>
+        <select data-kw-idx="${i}" data-kw-field="severity" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px;">
+          ${["info","low","medium","high","critical"].map(s=>`<option value="${s}" ${r.severity===s?"selected":""}>${s}</option>`).join("")}
+        </select>
+      </td>
+      <td style="width:60px;"><button class="secondary" data-kw-del="${i}" style="padding:3px 8px; font-size:11px;">删</button></td>
+    </tr>`).join("");
+  const html = `
+    <table style="width:100%; font-size:12px;">
+      <thead><tr><th>正则 (IGNORECASE)</th><th>分类</th><th>严重度</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" style="color:#6b7280; padding:14px;">（空）点 + 添加关键字 新建</td></tr>'}</tbody>
+    </table>`;
+  $("kwTableContainer").innerHTML = html;
+  $("kwTableContainer").querySelectorAll("[data-kw-idx]").forEach(el => {
+    el.oninput = el.onchange = () => {
+      const i = parseInt(el.dataset.kwIdx);
+      const f = el.dataset.kwField;
+      RULES_STATE.user.keyword_rules[i][f] = el.value;
+      markDirty();
+    };
+  });
+  $("kwTableContainer").querySelectorAll("[data-kw-del]").forEach(btn => {
+    btn.onclick = () => {
+      RULES_STATE.user.keyword_rules.splice(parseInt(btn.dataset.kwDel), 1);
+      renderKeywordRules();
+      markDirty();
+    };
+  });
+}
+$("kwAddRowBtn").onclick = () => {
+  RULES_STATE.user.keyword_rules.push({pattern:"", category:"custom", severity:"medium"});
+  renderKeywordRules();
+  markDirty();
+};
+
+// ---- 电压提取器 ----
+function renderVoltageExtractors() {
+  const rows = RULES_STATE.user.voltage_extractors.map((r, i) => `
+    <tr>
+      <td><input data-v-idx="${i}" data-v-field="name" value="${(r.name||"")}" placeholder="我的 VBAT" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px;" /></td>
+      <td><input data-v-idx="${i}" data-v-field="pattern" value="${(r.pattern||"").replace(/"/g,'&quot;')}" placeholder="VBAT=([\\d.]+)" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-family:monospace;" /></td>
+      <td>
+        <select data-v-idx="${i}" data-v-field="unit" style="width:80px; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px;">
+          ${["mV","V"].map(u=>`<option value="${u}" ${r.unit===u?"selected":""}>${u}</option>`).join("")}
+        </select>
+      </td>
+      <td><input data-v-idx="${i}" data-v-field="scale" value="${r.scale ?? 1.0}" type="number" step="0.001" style="width:80px; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px;" /></td>
+      <td style="text-align:center;"><input data-v-idx="${i}" data-v-field="enabled" type="checkbox" ${r.enabled !== false ? "checked":""} /></td>
+      <td style="width:60px;"><button class="secondary" data-v-del="${i}" style="padding:3px 8px; font-size:11px;">删</button></td>
+    </tr>`).join("");
+  const html = `
+    <table style="width:100%; font-size:12px;">
+      <thead><tr><th>名称</th><th>正则</th><th>单位</th><th>缩放</th><th>启用</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="color:#6b7280; padding:14px;">（空）点 + 添加提取器 新建</td></tr>'}</tbody>
+    </table>`;
+  $("vTableContainer").innerHTML = html;
+  $("vTableContainer").querySelectorAll("[data-v-idx]").forEach(el => {
+    el.oninput = el.onchange = () => {
+      const i = parseInt(el.dataset.vIdx);
+      const f = el.dataset.vField;
+      let val = el.type === "checkbox" ? el.checked : el.value;
+      if (f === "scale") val = parseFloat(val);
+      RULES_STATE.user.voltage_extractors[i][f] = val;
+      markDirty();
+    };
+  });
+  $("vTableContainer").querySelectorAll("[data-v-del]").forEach(btn => {
+    btn.onclick = () => {
+      RULES_STATE.user.voltage_extractors.splice(parseInt(btn.dataset.vDel), 1);
+      renderVoltageExtractors();
+      markDirty();
+    };
+  });
+}
+$("vAddRowBtn").onclick = () => {
+  RULES_STATE.user.voltage_extractors.push({name:"", pattern:"", unit:"V", scale:1.0, enabled:true});
+  renderVoltageExtractors();
+  markDirty();
+};
+
+// ---- 操作栏 ----
+async function loadRulesIntoState() {
+  const api = getApi();
+  if (!api) return;
+  const [userR, builtinR] = await Promise.all([api.get_user_rules(), api.get_builtin_rules_preview()]);
+  if (!userR.ok) { toast("读取用户规则失败: " + userR.error, "error"); return; }
+  if (!builtinR.ok) { toast("读取 builtin 规则失败: " + builtinR.error, "error"); return; }
+  if (userR.path) $("userRulesPathLabel").textContent = userR.path;
+  // merge: builtin + user
+  RULES_STATE.builtin = builtinR;
+  const u = userR.rules || {};
+  RULES_STATE.user = {
+    number_mappings: {
+      soc_mode:   { ...(builtinR.number_mappings?.soc_mode   || {}), ...(u.number_mappings?.soc_mode   || {}) },
+      rst_type:   { ...(builtinR.number_mappings?.rst_type   || {}), ...(u.number_mappings?.rst_type   || {}) },
+      rst_reason: { ...(builtinR.number_mappings?.rst_reason || {}), ...(u.number_mappings?.rst_reason || {}) },
+    },
+    keyword_rules: [...(u.keyword_rules || [])],
+    voltage_extractors: [...(u.voltage_extractors || [])],
+  };
+  RULES_STATE.userFromDisk = JSON.parse(JSON.stringify(RULES_STATE.user));
+  renderNumberMappings();
+  renderKeywordRules();
+  renderVoltageExtractors();
+  markLoaded();
+  if (!userR.exists) {
+    $("rulesStatus").textContent = "未自定义（仅 builtin）";
+    $("rulesStatus").className = "badge badge-info";
+  }
+}
+
+$("rulesReloadBtn").onclick = () => {
+  if (RULES_STATE.dirty) {
+    if (!confirm("当前有未保存的修改，确定要重新加载吗？")) return;
+  }
+  loadRulesIntoState();
+};
+
+$("rulesValidateBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) return;
+  let errors = [];
+  // number_mappings
+  for (const sub of ["soc_mode","rst_type","rst_reason"]) {
+    for (const [k, v] of Object.entries(RULES_STATE.user.number_mappings[sub] || {})) {
+      if (!v || !v.trim()) errors.push(`数字映射 ${sub}.${k}: 名称为空`);
+    }
+  }
+  // keyword_rules
+  for (let i = 0; i < RULES_STATE.user.keyword_rules.length; i++) {
+    const r = RULES_STATE.user.keyword_rules[i];
+    if (!r.pattern) { errors.push(`关键字 #${i+1}: pattern 为空`); continue; }
+    const res = await api.validate_pattern("keyword", r.pattern);
+    if (!res.ok) errors.push(`关键字 #${i+1} "${r.pattern}": ${res.error}`);
+  }
+  // voltage_extractors
+  for (let i = 0; i < RULES_STATE.user.voltage_extractors.length; i++) {
+    const r = RULES_STATE.user.voltage_extractors[i];
+    if (!r.name) { errors.push(`电压提取器 #${i+1}: name 为空`); continue; }
+    if (!r.pattern) { errors.push(`电压提取器 #${i+1}: pattern 为空`); continue; }
+    const res = await api.validate_pattern("voltage", r.pattern);
+    if (!res.ok) errors.push(`电压提取器 #${i+1} "${r.pattern}": ${res.error}`);
+  }
+  if (errors.length === 0) {
+    toast(`✓ 校验通过：${RULES_STATE.user.keyword_rules.length} 关键字 + ${RULES_STATE.user.voltage_extractors.length} 提取器`, "success");
+  } else {
+    toast(`✗ 校验失败: ${errors.length} 个问题（请看控制台）`, "error");
+    console.error("[rules validate]", errors);
+  }
+};
+
+$("rulesResetBuiltinBtn").onclick = async () => {
+  if (!confirm("确定要删除所有用户自定义规则，恢复仅 builtin 生效吗？")) return;
+  const api = getApi();
+  if (!api) return;
+  const r = await api.reset_user_rules();
+  if (r.ok) {
+    toast("✓ 已恢复 builtin 默认", "success");
+    await loadRulesIntoState();
+  } else {
+    toast("恢复失败: " + r.error, "error");
+  }
+};
+
+$("rulesSaveBtn").onclick = async () => {
+  const api = getApi();
+  if (!api) return;
+  // 构造 user_rules：剔除跟 builtin 完全一致的 number_mappings 项
+  const cleanNm = { soc_mode:{}, rst_type:{}, rst_reason:{} };
+  for (const sub of ["soc_mode","rst_type","rst_reason"]) {
+    const builtinSub = RULES_STATE.builtin.number_mappings?.[sub] || {};
+    for (const [k, v] of Object.entries(RULES_STATE.user.number_mappings[sub] || {})) {
+      if (builtinSub[k] !== v) cleanNm[sub][k] = v;
+    }
+  }
+  const payload = {
+    version: "0.2.0",
+    number_mappings: cleanNm,
+    keyword_rules: RULES_STATE.user.keyword_rules,
+    voltage_extractors: RULES_STATE.user.voltage_extractors,
+  };
+  // 全空就保存空对象（让文件存在但所有规则 = builtin）
+  const r = await api.save_user_rules(payload);
+  if (r.ok) {
+    toast("✓ 规则已保存到 " + r.path, "success");
+    await loadRulesIntoState();
+  } else {
+    toast("✗ 保存失败: " + r.error, "error");
+  }
+};
+
+// 标签切换时如果是规则页，自动加载
+document.querySelectorAll('.tab').forEach(tab => {
+  // already bound above for switching, but rules panel needs lazy load
+});
+// override: 进入规则页时 load
+const _origTabOnclick = document.querySelector('.tab[data-tab="rules"]').onclick;
+// 用 setInterval 监听 hash 改动过于重；直接加全局 click
+document.querySelector('.tab[data-tab="rules"]').addEventListener('click', () => {
+  // 第一次进入时 RULES_STATE.builtin 为 null 才加载
+  if (!RULES_STATE.builtin) loadRulesIntoState();
+});
+</script>
+</body>
+</html>
+

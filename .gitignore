@@ -1,0 +1,86 @@
+# ============================================================
+#  MCU_TRACE .gitignore
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+installer/dist/
+installer/MCU_TRACE/
+installer/build/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+gui_*.log
+gui_*.out
+_pytest/
+*_stderr.log
+*_stdout.log
+
+# 用户配置（每台机器不同）
+.mavis/
+
+# ============================================================
+#  work/ 目录处理：保留验证产物 + 排除原始数据/解密的 logcat
+# ============================================================
+# 原始抓包样本（711MB，太大不入仓）
+work/log_20260629_140253/
+
+# .enc 加密样本（每份 68MB，且解密后才能用，不入仓）
+work/test_enc*/
+work/_e2e*/
+
+# 旧版报告备份
+work/report.html.bak
+work/_e2e.bak*/
+
+# 临时调试脚本
+work/check_*.py
+work/_imgs/
+
+# ============================================================
+#  但保留以下验证产物（CI / reviewer 必看）
+# ============================================================
+!work/test_enc4/README.md
+!work/report.html
+!work/report.json
+!work/report_verify.html
+!work/report_verify.json
+!work/final_e2e_report.md
+!work/_e2e/.gitkeep
+!work/_imgs/.gitkeep

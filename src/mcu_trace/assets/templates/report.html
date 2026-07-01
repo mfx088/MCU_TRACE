@@ -1,0 +1,565 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCU TRACE Report - {{ session_name }}</title>
+<style>
+  /* ============================================================
+   *  v0.2.1: 现代化设计系统
+   * ============================================================ */
+  :root {
+    --primary: #1e3a8a;
+    --primary-light: #3b82f6;
+    --bg: #f5f7fa;
+    --card-bg: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    --border-soft: #f3f4f6;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --critical: #dc2626;
+    --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    margin: 0; padding: 32px 20px;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 14px;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  /* 标题区 */
+  .report-header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+    padding: 28px 32px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 24px;
+  }
+  .report-header h1 {
+    margin: 0 0 8px 0;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .report-header .meta {
+    color: rgba(255,255,255,0.85);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .report-header .meta b { color: white; font-weight: 600; }
+
+  /* ============================================================
+   *  章节标题（v0.2.1 新设计：左竖条 + 序号 + 标题，更轻盈）
+   * ============================================================ */
+  .section { margin: 32px 0; }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 16px 0;
+    padding: 0 0 0 16px;
+    border-left: 4px solid var(--primary-light);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-title .num {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 2px 4px rgba(59,130,246,0.3);
+  }
+  .section-title .desc {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+
+  /* ============================================================
+   *  卡片基础
+   * ============================================================ */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-soft);
+    padding: 20px 24px;
+  }
+
+  /* TL;DR 卡片 */
+  .tldr { padding: 20px 24px; border-radius: var(--radius); margin: 0 0 24px 0;
+          box-shadow: var(--shadow-lg); border: 1px solid var(--border-soft); }
+  .tldr.ok { background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+             border-left: 5px solid var(--success); }
+  .tldr.warn { background: linear-gradient(135deg, #fffbeb, #fef3c7);
+              border-left: 5px solid var(--warn); }
+  .tldr.crit { background: linear-gradient(135deg, #fef2f2, #fee2e2);
+              border-left: 5px solid var(--critical); }
+  .tldr-title { font-size: 16px; font-weight: 700; margin-bottom: 12px;
+                color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .tldr-stats { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px;
+                font-size: 13px; color: var(--text-muted); }
+  .tldr-stat { display: inline-flex; align-items: center; gap: 6px; }
+  .tldr-stat .value { font-weight: 700; color: var(--text); font-size: 14px; }
+  .tldr-issues { list-style: none; padding: 0; margin: 12px 0 0 0;
+                 display: flex; flex-direction: column; gap: 6px; }
+  .tldr-issues li { padding: 8px 14px; font-size: 14px; border-radius: var(--radius-sm);
+                    background: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 8px; }
+  .tldr-issues li.critical { color: var(--critical); font-weight: 700;
+                             background: #fef2f2; border: 1px solid #fecaca; }
+  .tldr-issues li.high { color: #ea580c; font-weight: 600;
+                          background: #fff7ed; border: 1px solid #fed7aa; }
+  .tldr-issues li.medium { color: #4b5563; }
+
+  /* ============================================================
+   *  概览统计条（v0.2.1 新设计：横向 chip 风）
+   * ============================================================ */
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 0;
+  }
+  .summary-chip {
+    background: white;
+    padding: 16px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 12px;
+    transition: all 0.2s;
+  }
+  .summary-chip:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+  .summary-chip .icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #dbeafe, #eff6ff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .summary-chip .body { min-width: 0; }
+  .summary-chip .label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .summary-chip .value { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+  .summary-chip.warn .icon { background: linear-gradient(135deg, #fed7aa, #fef3c7); }
+  .summary-chip.warn .value { color: var(--warn); }
+  .summary-chip.crit .icon { background: linear-gradient(135deg, #fecaca, #fee2e2); }
+  .summary-chip.crit .value { color: var(--critical); }
+  .summary-chip.ok .icon { background: linear-gradient(135deg, #a7f3d0, #d1fae5); }
+  .summary-chip.ok .value { color: var(--success); }
+
+  /* 图表卡片（v0.2.1：白卡 + 圆角 + 浅边框，图表内嵌） */
+  .chart-card {
+    background: white;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px 12px 8px 12px;
+    margin: 0;
+    transition: box-shadow 0.2s;
+  }
+  .chart-card:hover { box-shadow: var(--shadow-lg); }
+  .chart-card img {
+    max-width: 100%; height: auto; display: block; margin: 0 auto;
+    border-radius: var(--radius-sm);
+  }
+  .chart-caption {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 8px 0 4px 0;
+  }
+
+  /* ============================================================
+   *  表格（v0.2.1：现代风格 + 中文不换行）
+   * ============================================================ */
+  .table-wrap {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-soft);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  th {
+    background: linear-gradient(180deg, #1e3a8a, #1e40af);
+    color: white;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid #1e40af;
+    white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
+  }
+  th:first-child { padding-left: 18px; }
+  th:last-child { padding-right: 18px; }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    color: var(--text);
+    /* 中文不按字断行 */
+    word-break: keep-all;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  td:first-child { padding-left: 18px; }
+  td:last-child { padding-right: 18px; }
+  /* 长内容列允许换行（如消息） */
+  td.wrap { white-space: normal; word-break: break-word; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.15s; }
+  tbody tr:hover { background: #f9fafb; }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  tbody tr:nth-child(even):hover { background: #f3f4f6; }
+
+  .raw { font-family: "Cascadia Code", "Consolas", "SF Mono", monospace;
+         font-size: 12px; color: #4b5563; }
+  .illegal-row { background: #fef2f2 !important; }
+  .illegal-row td { color: var(--critical); font-weight: 600; }
+  .illegal-row:hover { background: #fee2e2 !important; }
+
+  /* Badge */
+  .badge { display: inline-flex; align-items: center; gap: 3px;
+           padding: 3px 10px; border-radius: 12px; font-size: 11px;
+           font-weight: 600; white-space: nowrap; }
+  .badge-info    { background: #f3f4f6; color: #4b5563; }
+  .badge-low     { background: #d1fae5; color: #065f46; }
+  .badge-medium  { background: #fef3c7; color: #92400e; }
+  .badge-high    { background: #fed7aa; color: #9a3412; }
+  .badge-critical{ background: #fecaca; color: #991b1b; }
+
+  .empty {
+    color: var(--text-muted); font-style: italic; padding: 32px 20px;
+    text-align: center; background: white; border-radius: var(--radius);
+    border: 1px dashed var(--border);
+  }
+  .footer {
+    margin-top: 48px; padding: 24px;
+    text-align: center; color: var(--text-muted); font-size: 12px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .footer .brand { font-weight: 600; color: var(--text); }
+
+  /* 响应式 */
+  @media (max-width: 768px) {
+    body { padding: 16px 12px; }
+    .report-header { padding: 20px; }
+    .summary-strip { grid-template-columns: repeat(2, 1fr); }
+    td, th { padding: 8px 10px; }
+  }
+
+  /* 打印优化 */
+  @media print {
+    body { background: white; padding: 0; }
+    .card, .chart-card, .table-wrap, .tldr { box-shadow: none; border: 1px solid #d1d5db; }
+    .summary-chip:hover { transform: none; }
+    .section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- 报告头 -->
+  <div class="report-header">
+    <h1>🚗 MCU TRACE 分析报告</h1>
+    <div class="meta">
+      <b>会话：</b>{{ session_name }} &nbsp;·&nbsp;
+      <b>生成时间：</b>{{ generated_at }}<br>
+      <b>时间范围：</b>
+      {{ stats.time_range[0] or "?" }} ~ {{ stats.time_range[1] or "?" }}
+    </div>
+  </div>
+
+  <!-- TL;DR 卡片 -->
+  {% set tldr_class = "ok" %}
+  {% if tldr.issues %}{% for i in tldr.issues %}{% if i.severity == "critical" %}{% set tldr_class = "crit" %}{% endif %}{% endfor %}{% endif %}
+  {% if tldr_class == "ok" and tldr.issues %}{% set tldr_class = "warn" %}{% endif %}
+
+  <div class="tldr {{ tldr_class }}">
+    <div class="tldr-title">
+      {% if not tldr.issues %}✅ 一句话总结：本次跑没发现异常
+      {% elif tldr_class == "crit" %}🚨 一句话总结：发现严重问题，请重点关注
+      {% else %}⚠️ 一句话总结：发现异常，建议查看详情
+      {% endif %}
+    </div>
+    <div class="tldr-stats">
+      <span class="tldr-stat">⏱ <span class="label">跑数据时长：</span><span class="value">{{ tldr.duration_min }} 分钟</span></span>
+      <span class="tldr-stat">📊 <span class="label">mcu_trace 事件：</span><span class="value">{{ tldr.event_count }} 条</span></span>
+    </div>
+    {% if tldr.issues %}
+    <ul class="tldr-issues">
+      {% for i in tldr.issues %}
+      <li class="{{ i.severity }}">{{ i.emoji }} {{ i.text }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  <!-- 1. 概览统计 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">1</span>概览统计
+      <span class="desc">— 一眼看出本次数据的"轮廓"</span>
+    </h2>
+    <div class="summary-strip">
+      <div class="summary-chip">
+        <div class="icon">📊</div>
+        <div class="body">
+          <div class="label">mcu_trace 事件</div>
+          <div class="value">{{ stats.mcu_trace_events }}</div>
+        </div>
+      </div>
+      <div class="summary-chip">
+        <div class="icon">📁</div>
+        <div class="body">
+          <div class="label">源文件</div>
+          <div class="value">{{ stats.source_files }}</div>
+        </div>
+      </div>
+      <div class="summary-chip {% if stats.voltage_points > 0 %}ok{% endif %}">
+        <div class="icon">⚡</div>
+        <div class="body">
+          <div class="label">电压点</div>
+          <div class="value">{{ stats.voltage_points }}</div>
+        </div>
+      </div>
+      <div class="summary-chip {% if stats.fsm_illegal > 0 %}crit{% else %}ok{% endif %}">
+        <div class="icon">{% if stats.fsm_illegal > 0 %}🚨{% else %}✅{% endif %}</div>
+        <div class="body">
+          <div class="label">非法跳转</div>
+          <div class="value">{{ stats.fsm_illegal }}</div>
+        </div>
+      </div>
+      <div class="summary-chip">
+        <div class="icon">🔄</div>
+        <div class="body">
+          <div class="label">状态转换</div>
+          <div class="value">{{ stats.fsm_transitions }}</div>
+        </div>
+      </div>
+      <div class="summary-chip {% if stats.rst_events > 0 %}warn{% endif %}">
+        <div class="icon">🔌</div>
+        <div class="body">
+          <div class="label">复位事件</div>
+          <div class="value">{{ stats.rst_events }}</div>
+        </div>
+      </div>
+      <div class="summary-chip {% if stats.keyword_hits > 0 %}warn{% endif %}">
+        <div class="icon">🔍</div>
+        <div class="body">
+          <div class="label">关键字命中</div>
+          <div class="value">{{ stats.keyword_hits }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 电压曲线 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">2</span>电源管理 · 整车电池电压
+      <span class="desc">— 9-16V 绿带为正常范围</span>
+    </h2>
+    {% if voltage_png %}
+    <div class="chart-card">
+      <img src="data:image/png;base64,{{ voltage_png }}" alt="整车电池电压" />
+    </div>
+    {% else %}
+    <div class="empty">📭 暂无电压数据。如果项目里 VoltDet / VBAT 报点少，可以去 GUI 设置里加自定义电压关键字。</div>
+    {% endif %}
+  </div>
+
+  <!-- 3. PSM 状态机时序 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">3</span>MCU 电源状态机时序
+      <span class="desc">— 彩色块 = 状态持续时间</span>
+    </h2>
+    {% if psm_png %}
+    <div class="chart-card">
+      <img src="data:image/png;base64,{{ psm_png }}" alt="MCU 电源状态机时序" />
+    </div>
+    {% else %}
+    <div class="empty">📭 暂无 PSM 状态机数据</div>
+    {% endif %}
+  </div>
+
+  <!-- 4. SoC 系统模式时序 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">4</span>SoC 系统模式时序
+      <span class="desc">— SoC 端独立的状态机</span>
+    </h2>
+    {% if soc_png %}
+    <div class="chart-card">
+      <img src="data:image/png;base64,{{ soc_png }}" alt="SoC 系统模式时序" />
+    </div>
+    {% else %}
+    <div class="empty">📭 暂无 SoC 模式数据</div>
+    {% endif %}
+  </div>
+
+  <!-- 5. 异常事件分类 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">5</span>异常事件分类
+      <span class="desc">— 颜色越红越严重</span>
+    </h2>
+    {% if keyword_png %}
+    <div class="chart-card">
+      <img src="data:image/png;base64,{{ keyword_png }}" alt="异常事件分类" />
+    </div>
+    {% else %}
+    <div class="empty">📭 暂无关键字命中</div>
+    {% endif %}
+  </div>
+
+  <!-- 6. 状态转换明细 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">6</span>状态转换明细
+      <span class="desc">— 全量记录，每行一个跳转</span>
+    </h2>
+    {% if transition_table %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>系统</th>
+            <th>时间</th>
+            <th>起始状态</th>
+            <th>目标状态</th>
+            <th>触发事件</th>
+            <th>标记</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transition_table %}
+          <tr class="{% if t.illegal %}illegal-row{% endif %}">
+            <td><b>{{ t.fsm }}</b></td>
+            <td class="raw">{{ t.timestamp }}</td>
+            <td>{{ t.from }}</td>
+            <td>{{ t.to }}</td>
+            <td class="raw">{{ t.event }}</td>
+            <td style="font-size:18px">{{ t.illegal }}</td>
+            <td>{{ t.reason }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">📭 无状态转换</div>
+    {% endif %}
+  </div>
+
+  <!-- 7. MCU 复位事件 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">7</span>MCU 复位事件
+      <span class="desc">— 按硬件枚举映射</span>
+    </h2>
+    {% if rst_table %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>复位类型</th>
+            <th>原因</th>
+            <th>严重度</th>
+            <th>原始日志</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rst_table %}
+          <tr>
+            <td class="raw">{{ r.timestamp }}</td>
+            <td>{{ r.rst_type }}</td>
+            <td>{{ r.reason }}</td>
+            <td><span class="badge" style="background: {{ r.severity_color }}20; color: {{ r.severity_color }}">{{ r.severity_zh }}</span></td>
+            <td class="raw wrap">{{ r.raw }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">📭 无复位事件</div>
+    {% endif %}
+  </div>
+
+  <!-- 8. 关键字命中明细 -->
+  <div class="section">
+    <h2 class="section-title">
+      <span class="num">8</span>关键字命中明细
+      <span class="desc">— 按时间正序</span>
+    </h2>
+    {% if keyword_table %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>类别</th>
+            <th>模块</th>
+            <th>严重度</th>
+            <th>命中片段</th>
+            <th>消息</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k in keyword_table %}
+          <tr>
+            <td class="raw">{{ k.timestamp }}</td>
+            <td>{{ k.category_emoji }} {{ k.category_zh }}</td>
+            <td>{{ k.module }}</td>
+            <td><span class="badge" style="background: {{ k.severity_color }}20; color: {{ k.severity_color }}">{{ k.severity_emoji }} {{ k.severity_zh }}</span></td>
+            <td class="raw">{{ k.matched }}</td>
+            <td class="raw wrap">{{ k.message }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">📭 无关键字命中</div>
+    {% endif %}
+  </div>
+
+  <div class="footer">
+    <span class="brand">Generated by MCU TRACE v0.2.1</span> · mafuxuan<br>
+    本报告面向非技术受众，关键术语已翻译成中文，图表用色块和颜色辅助理解
+  </div>
+
+</div>
+
+</body>
+</html>

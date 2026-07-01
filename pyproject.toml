@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcu-trace"
+version = "0.2.2"
+description = "MCU 日志自动解析 + 可视化分析工具，专注电源管理生命周期曲线"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "mafuxuan", email = "mafuxuan@example.com" }]
+
+dependencies = [
+    "pywebview>=4.4",
+    "matplotlib>=3.7",
+    "jinja2>=3.1",
+    "pyinstaller>=6.0",  # 仅打包需要
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+packaging = [
+    "pyinstaller>=6.0",
+]
+
+[project.scripts]
+mcu-trace = "mcu_trace.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mcu_trace = [
+    "web/*.html",
+    "web/*.js",
+    "web/*.css",
+    "web/vendor/*.js",
+    "assets/config/*.json",
+    "assets/templates/*.html",
+    "assets/samples/*.log",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

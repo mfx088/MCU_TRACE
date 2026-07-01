@@ -1,0 +1,80 @@
+{
+  "name": "PSM",
+  "comment": "Power State Manager 状态机定义（实测 9+ 状态，10 槽位）",
+  "states": [
+    "PreStandby",
+    "Standby",
+    "Normal",
+    "PrepareSleep_Step1",
+    "PreSleep_1",
+    "PreSleep_2",
+    "WatiEvnShutDown",
+    "WakeUp",
+    "StartUp_1",
+    "StartUp_2"
+  ],
+  "initial": "PreStandby",
+  "transitions": [
+    {
+      "from": "PreStandby",
+      "to": "Standby",
+      "pattern": "PreStandby->Standby",
+      "event_id": "EVENT\\[14\\]"
+    },
+    {
+      "from": "Standby",
+      "to": "PrepareSleep_Step1",
+      "pattern": "Standby->PrepareSleep_Step1",
+      "event_id": "EVENT\\[14\\]"
+    },
+    {
+      "from": "PrepareSleep_Step1",
+      "to": "PreSleep_1",
+      "pattern": "PrepareSleep_Step1->PreSleep_1",
+      "event_id": "EVENT\\[16\\]"
+    },
+    {
+      "from": "PreSleep_1",
+      "to": "PreSleep_2",
+      "pattern": "PreSleep_1->PreSleep_2",
+      "event_id": null
+    },
+    {
+      "from": "PreSleep_2",
+      "to": "WatiEvnShutDown",
+      "pattern": "PreSleep_2->WatiEvnShutDown",
+      "event_id": "EVENT\\[12\\]"
+    },
+    {
+      "from": "WatiEvnShutDown",
+      "to": "WakeUp",
+      "pattern": "WatiEvnShutDown->WakeUp",
+      "event_id": "EVENT\\[11\\]"
+    },
+    {
+      "from": "WakeUp",
+      "to": "StartUp_1",
+      "pattern": "WakeUp->StartUp_1",
+      "event_id": "EVENT\\[11\\]"
+    },
+    {
+      "from": "StartUp_1",
+      "to": "StartUp_2",
+      "pattern": "StartUp_1->StartUp_2",
+      "event_id": "EVENT\\[15\\]"
+    },
+    {
+      "from": "StartUp_2",
+      "to": "PreStandby",
+      "pattern": "StartUp_2->PreStandby",
+      "event_id": "EVENT\\[12\\]"
+    },
+    {
+      "from": "PreStandby",
+      "to": "Normal",
+      "pattern": "PreStandby->Normal",
+      "event_id": "EVENT\\[5\\]"
+    }
+  ],
+  "transition_regex": "^([\\w_]+)->([\\w_]+)(?:,\\s*EVENT\\[(\\d+)\\])?"
+}
