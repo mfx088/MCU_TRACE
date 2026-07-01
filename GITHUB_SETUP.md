@@ -3,6 +3,18 @@
 > 本仓库**已本地 git 初始化**（commit `1f6003a`），但因公司网络限制 + GitHub 账号 SSH key 未配置，
 > **需你手动完成最后一步**。整个过程 5 分钟。
 
+## ⚠️ 关键：公司网封了 github.com
+
+实测：
+- SSH 22 → `git@github.com`：`Permission denied (publickey)`（其实是 TCP 通的，但 key 没在你的 GitHub 账号下）
+- HTTPS 443 → `api.github.com`：`基础连接已经关闭: 发送时发生错误`（公司网拦截）
+- `127.0.0.1:8443` 内部代理：服务未启动
+
+**参考同仓项目 [E:\Git_PJ\CAN_LOG\HANDOVER.md §12](E:\Git_PJ\CAN_LOG\HANDOVER.md)：**
+> `# Git push   # 公司网封 github，需手机热点`
+
+**→ 唯一可靠方案：切到手机热点再 push**
+
 ## 现状
 
 - **本地仓库**：✅ 已 `git init` + 首次 commit（`v0.2.2: 初始版本`，47 个文件，852KB）
@@ -17,53 +29,53 @@
 
 ## 推送步骤
 
-### 方案 A：SSH（推荐，前提：GitHub 已加 SSH key）
+### ⭐ 方案 0（最可靠）：手机热点 + SSH
 
-1. 打开 https://github.com/settings/keys
-2. 点 "New SSH key"，把上面那把 `id_rsa.pub` 内容粘贴进去，Title 填 `mafuxuan@hangsheng.com.cn` 或 `MFX-ThinkBook`
-3. 创建空仓库：
-   - 打开 https://github.com/new
+参考同仓项目经验，公司网封了 github.com 所有通道。**唯一可靠方案是切到手机热点**：
+
+1. **手机开热点**，电脑连上（iPhone 个人热点 / 安卓 USB 共享网络都行）
+2. **创建空仓库** https://github.com/new
    - Repository name: `MCU_TRACE`
    - Visibility: **Private**（公司内部工具）
-   - ⚠️ **不要勾选** "Add a README file" / "Add .gitignore" / "Choose a license"（避免和本地冲突）
-4. 在本仓库目录跑：
-   ```bash
+   - ⚠️ **不要勾选** Add a README / .gitignore / license（避免和本地冲突）
+3. **添加 SSH key** https://github.com/settings/keys
+   - 把 `~/.ssh/id_rsa.pub` 内容粘贴进去（见下方完整公钥）
+   - Title: `mafuxuan@hangsheng.com.cn` 或 `MFX-ThinkBook`
+4. **跑推送脚本**：
+   ```powershell
    cd e:\Git_PJ\MCU_TRACE
+   .\push.bat
+   ```
+   或者手动：
+   ```powershell
+   ssh -T git@github.com       # 应看到 "Hi mafuxuan! ..."
    git push -u origin main
    ```
+5. **完成后切回公司网**（手机热点耗电 + 限流量）
 
-### 方案 B：HTTPS + PAT（公司网拦截时备选）
+> 完整公钥（`~/.ssh/id_rsa.pub`）：
+> ```
+> ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC1eAeOHQlwqftmpZmqyDIXs48T8zZJDfvibl+Dc7fiFoUdC2LrPe2OctQqyoyrulDgzzO15p0PFLCwb8o6VZhcH75H4FUEB5FmSRXHlZUiPhvqFKWFvesO1lIgI3/6W2HGeue1V92OhFuIUefP8DgW2bBg3hNpHfK1EFPq+sx1FAcR3qA21P75fnKfQlWSfv0vaEZlwYobvflaHDrwy0EXW8sdg7vd4gP+QyYHD5I63USMdJMnShkIj2Tqcz2QIJtmD5Xy+Ix6R6nT38NLSxt3OCUR5h9ED1CXScMkF5FEoVr/VluH5wTVOM4+/e1KRyiM/bDgaLWiuU9CLlcS153x9DCTZahqeLNV4+R46vSij+xlztTTHEt1UpatNv0vA95+S0E7nocXOlyrU29Qd/SL88JlWnQNgTbaI7jQsPbbt7DfRe8c557V80UU5LsHLamNoln1W4aPsVrms43EUDXSALH/ihOAvfdswB7MLXAmOinNgGBnit4htPrRn5+FLAScB3egwRW+mUXdMWgw5r1xggVwRpd/5IZZ811c/R/uni6exw4y6n0iaDkTdBKYS1DzTE9BSKyV3vrHJFH9ydPzI/Y6FTurRvYgWVzcihvpRQBYcQ1O0w5XIFLz/gyHIs+eTJCVIq3s3j3iYuhPDmdJNblaDoXVBAdL50GiWOVhuQ== mafuxuan@hangsheng.com.cn
+> ```
 
-1. 创建 PAT：https://github.com/settings/tokens/new
-   - Note: `MCU_TRACE push`
-   - Expiration: 90 days（或按公司策略）
-   - Scopes: `repo`（完整仓库访问）
-2. 创建空仓库：https://github.com/new（同上）
-3. 改 remote 为 HTTPS + 推送：
-   ```bash
-   cd e:\Git_PJ\MCU_TRACE
-   git remote set-url origin https://github.com/mafuxuan/MCU_TRACE.git
-   # 推送时 PAT 作为密码（用户名用 mafuxuan）
-   git push -u origin main
-   # Windows 凭据管理器会记住，下次不用再输入
-   ```
+### 方案 1：手机热点 + HTTPS + PAT（不依赖 SSH key）
 
-### 方案 C：让我帮你做（需提供 PAT）
-
-把 PAT 通过安全渠道发给我（飞书/邮件都行），我可以一行 curl + push：
+如果不想加 SSH key，用 PAT：
 ```powershell
-$env:GH_TOKEN = 'ghp_xxxxxxxxxxxxxxxxxxxx'
-# 创建仓库（私有）
-Invoke-RestMethod -Uri "https://api.github.com/user/repos" -Method Post `
-  -Headers @{Authorization = "token $env:GH_TOKEN"} `
-  -ContentType "application/json" `
-  -Body '{"name":"MCU_TRACE","private":true,"description":"MCU 日志自动解析 + 可视化分析工具（v0.2.2）","auto_init":false}'
-# 推送
+# 1. 切到手机热点
+# 2. 浏览器开 https://github.com/settings/tokens/new 拿 PAT（勾 repo）
+# 3. 创建空仓库
+# 4. 跑：
 cd e:\Git_PJ\MCU_TRACE
+$env:GH_TOKEN = 'ghp_你的token'
 git remote set-url origin https://mafuxuan:${GH_TOKEN}@github.com/mafuxuan/MCU_TRACE.git
 git push -u origin main
 git remote set-url origin https://github.com/mafuxuan/MCU_TRACE.git   # 去掉 token
 ```
+
+### 方案 2：把 PAT 给我
+
+把 PAT 飞书发我（`mafuxuan`），我可以在你切到手机热点时**一次性跑完创建 + push**。
 
 ## 推送成功后
 
