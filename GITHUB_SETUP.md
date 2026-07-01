@@ -1,114 +1,150 @@
 # GitHub 推送指南
 
 > 本仓库**已本地 git 初始化**（commit `1f6003a`），但因公司网络限制 + GitHub 账号 SSH key 未配置，
-> **需你手动完成最后一步**。整个过程 5 分钟。
+> **需你手动完成最后 2 步**。整个过程 5 分钟。
 
-## ⚠️ 关键：公司网封了 github.com
+## 关键：公司网封了 github.com（已有解法）
 
 实测：
-- SSH 22 → `git@github.com`：`Permission denied (publickey)`（其实是 TCP 通的，但 key 没在你的 GitHub 账号下）
-- HTTPS 443 → `api.github.com`：`基础连接已经关闭: 发送时发生错误`（公司网拦截）
-- `127.0.0.1:8443` 内部代理：服务未启动
+- SSH 22 → `git@github.com`：❌ TCP connect timeout
+- HTTPS 443 → `api.github.com` 直连：❌ SNI 错配 403
+- **新解法**：本地 TCP tunnel（参考 [CAN_LOG §17](E:\Git_PJ\CAN_LOG\HANDOVER.md)）
+  - Tunnel 转发到 `20.205.243.{160,161,166,168}:443`（公司网可达的 GitHub 主 IP 段）
+  - SSH 协议：tunnel 后正常工作
+  - HTTPS API：用 `curl --resolve api.github.com:443:20.205.243.168` 绕过 SNI
 
-**参考同仓项目 [E:\Git_PJ\CAN_LOG\HANDOVER.md §12](E:\Git_PJ\CAN_LOG\HANDOVER.md)：**
-> `# Git push   # 公司网封 github，需手机热点`
+## 当前状态（2026-07-01）
 
-**→ 唯一可靠方案：切到手机热点再 push**
-
-## 现状
-
-- **本地仓库**：✅ 已 `git init` + 首次 commit（`v0.2.2: 初始版本`，47 个文件，852KB）
-- **分支**：`main`
-- **远端**：`origin → git@github.com:mafuxuan/MCU_TRACE.git`（已设置）
-- **本地 SSH key**（`~/.ssh/id_rsa.pub`）：
-  ```
-  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC1eAeOHQlwqftmpZmqyDIXs48T8zZJDfvi...
-  mafuxuan@hangsheng.com.cn
-  ```
-  指纹：`SHA256:B/SR5cpqEQ4gS+XfDRpHoCUJKqHQL5bOlLPSsL1Ti0A`
+| 步骤 | 状态 |
+|---|---|
+| 本地 `git init` + main 分支 | ✅ |
+| 6 个 commit（47 文件 + tools/github_tunnel.py） | ✅ |
+| Remote `origin → git@github.com:mafuxuan/MCU_TRACE.git` | ✅ |
+| `tools/github_tunnel.py`（移植自 CAN_LOG §17） | ✅ |
+| `~/.ssh/config` 已加 tunnel 入口 | ✅ |
+| `push.bat` 一键脚本（启 tunnel + ssh 测试 + push + 收 tunnel） | ✅ |
+| GitHub 添加 `id_rsa.pub` SSH key | ❌ **待你完成** |
+| GitHub 创建空仓库 `mafuxuan/MCU_TRACE` | ❌ **待你完成** |
 
 ## 推送步骤
 
-### ⭐ 方案 0（最可靠）：手机热点 + SSH
+### Step 1: 在 GitHub 浏览器上添加 SSH key（一次性）
 
-参考同仓项目经验，公司网封了 github.com 所有通道。**唯一可靠方案是切到手机热点**：
+打开 https://github.com/settings/keys
 
-1. **手机开热点**，电脑连上（iPhone 个人热点 / 安卓 USB 共享网络都行）
-2. **创建空仓库** https://github.com/new
-   - Repository name: `MCU_TRACE`
-   - Visibility: **Private**（公司内部工具）
-   - ⚠️ **不要勾选** Add a README / .gitignore / license（避免和本地冲突）
-3. **添加 SSH key** https://github.com/settings/keys
-   - 把 `~/.ssh/id_rsa.pub` 内容粘贴进去（见下方完整公钥）
-   - Title: `mafuxuan@hangsheng.com.cn` 或 `MFX-ThinkBook`
-4. **跑推送脚本**：
-   ```powershell
-   cd e:\Git_PJ\MCU_TRACE
-   .\push.bat
-   ```
-   或者手动：
-   ```powershell
-   ssh -T git@github.com       # 应看到 "Hi mafuxuan! ..."
-   git push -u origin main
-   ```
-5. **完成后切回公司网**（手机热点耗电 + 限流量）
+点 "New SSH key"，粘贴以下完整公钥：
 
-> 完整公钥（`~/.ssh/id_rsa.pub`）：
-> ```
-> ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC1eAeOHQlwqftmpZmqyDIXs48T8zZJDfvibl+Dc7fiFoUdC2LrPe2OctQqyoyrulDgzzO15p0PFLCwb8o6VZhcH75H4FUEB5FmSRXHlZUiPhvqFKWFvesO1lIgI3/6W2HGeue1V92OhFuIUefP8DgW2bBg3hNpHfK1EFPq+sx1FAcR3qA21P75fnKfQlWSfv0vaEZlwYobvflaHDrwy0EXW8sdg7vd4gP+QyYHD5I63USMdJMnShkIj2Tqcz2QIJtmD5Xy+Ix6R6nT38NLSxt3OCUR5h9ED1CXScMkF5FEoVr/VluH5wTVOM4+/e1KRyiM/bDgaLWiuU9CLlcS153x9DCTZahqeLNV4+R46vSij+xlztTTHEt1UpatNv0vA95+S0E7nocXOlyrU29Qd/SL88JlWnQNgTbaI7jQsPbbt7DfRe8c557V80UU5LsHLamNoln1W4aPsVrms43EUDXSALH/ihOAvfdswB7MLXAmOinNgGBnit4htPrRn5+FLAScB3egwRW+mUXdMWgw5r1xggVwRpd/5IZZ811c/R/uni6exw4y6n0iaDkTdBKYS1DzTE9BSKyV3vrHJFH9ydPzI/Y6FTurRvYgWVzcihvpRQBYcQ1O0w5XIFLz/gyHIs+eTJCVIq3s3j3iYuhPDmdJNblaDoXVBAdL50GiWOVhuQ== mafuxuan@hangsheng.com.cn
-> ```
-
-### 方案 1：手机热点 + HTTPS + PAT（不依赖 SSH key）
-
-如果不想加 SSH key，用 PAT：
-```powershell
-# 1. 切到手机热点
-# 2. 浏览器开 https://github.com/settings/tokens/new 拿 PAT（勾 repo）
-# 3. 创建空仓库
-# 4. 跑：
-cd e:\Git_PJ\MCU_TRACE
-$env:GH_TOKEN = 'ghp_你的token'
-git remote set-url origin https://mafuxuan:${GH_TOKEN}@github.com/mafuxuan/MCU_TRACE.git
-git push -u origin main
-git remote set-url origin https://github.com/mafuxuan/MCU_TRACE.git   # 去掉 token
+```
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC1eAeOHQlwqftmpZmqyDIXs48T8zZJDfvibl+Dc7fiFoUdC2LrPe2OctQqyoyrulDgzzO15p0PFLCwb8o6VZhcH75H4FUEB5FmSRXXlZUiPhvqFKWFvesO1lIgI3/6W2HGeue1V92OhFuIUefP8DgW2bBg3hNpHfK1EFPq+sx1FAcR3qA21P75fnKfQlWSfv0vaEZlwYobvflaHDrwy0EXW8sdg7vd4gP+QyYHD5I63USMdJMnShkIj2Tqcz2QIJtmD5Xy+Ix6R6nT38NLSxt3OCUR5h9ED1CXScMkF5FEoVr/VluH5wTVOM4+/e1KRyiM/bDgaLWiuU9CLlcS153x9DCTZahqeLNV4+R46vSij+xlztTTHEt1UpatNv0vA95+S0E7nocXOlyrU29Qd/SL88JlWnQNgTbaI7jQsPbbt7DfRe8c557V80UU5LsHLamNoln1W4aPsVrms43EUDXSALH/ihOAvfdswB7MLXAmOinNgGBnit4htPrRn5+FLAScB3egwRW+mUXdMWgw5r1xggVwRpd/5IZZ811c/R/uni6exw4y6n0iaDkTdBKYS1DzTE9BSKyV3vrHJFH9ydPzI/Y6FTurRvYgWVzcihvpRQBYcQ1O0w5XIFLz/gyHIs+eTJCVIq3s3j3iYuhPDmdJNblaDoXVBAdL50GiWOVhuQ== mafuxuan@hangsheng.com.cn
 ```
 
-### 方案 2：把 PAT 给我
+- Title: `mafuxuan@hangsheng.com.cn` 或 `MFX-ThinkBook`
+- Key type: `Authentication Key`
 
-把 PAT 飞书发我（`mafuxuan`），我可以在你切到手机热点时**一次性跑完创建 + push**。
+### Step 2: 在 GitHub 浏览器上创建空仓库（一次性）
+
+打开 https://github.com/new
+
+- **Repository name**: `MCU_TRACE`
+- **Visibility**: `Private`（公司内部工具）
+- ⚠️ **不要勾选** Add a README / .gitignore / license
+- 点 "Create repository"
+
+### Step 3: 推送
+
+```powershell
+cd e:\Git_PJ\MCU_TRACE
+.\push.bat
+```
+
+**脚本行为**：
+1. 启动 `tools/github_tunnel.py`（监听 127.0.0.1:8443）
+2. 测 SSH：`ssh -T git@github.com`（应看到 `Hi mafuxuan! ...`）
+3. 跑 `git push -u origin main`
+4. 推完自动关 tunnel
+
+预期输出：
+```
+[1/4] 启动 GitHub tunnel...
+[2/4] 测试 GitHub SSH 连接...
+Hi mafuxuan! You've successfully authenticated...
+[3/4] 推送到 origin/main...
+...
+To github.com:mafuxuan/MCU_TRACE.git
+ * [new branch]      main -> main
+Branch 'main' set up to track remote branch 'main' from 'origin'.
+
+[4/4] 关闭 tunnel...
+✓ 推送成功！
+```
+
+## 备选方案：把 PAT 给我（最快，30 秒搞定）
+
+如果不想手动加 SSH key，把 GitHub PAT（[点这里创建](https://github.com/settings/tokens/new)，勾 `repo`，90 天有效）飞书发给我。
+
+我可以**用 tunnel + PAT 通过 API 一次性完成**（不需要你开浏览器）：
+```powershell
+$env:GH_TOKEN = 'ghp_你的token'
+$env:CURL = 'C:\Windows\System32\curl.exe'
+
+# 创建仓库 (公司网内 --resolve 绕 SNI)
+& $env:CURL -X POST -H "Authorization: token $env:GH_TOKEN" `
+  --resolve api.github.com:443:20.205.243.168 `
+  https://api.github.com/user/repos `
+  -d '{"name":"MCU_TRACE","private":true,"description":"MCU 日志自动解析 + 可视化分析工具（v0.2.2）"}'
+
+# 添加 SSH key
+$pubkey = Get-Content $env:USERPROFILE\.ssh\id_rsa.pub
+$body = @{title="mafuxuan-MFX-ThinkBook"; key=$pubkey} | ConvertTo-Json
+& $env:CURL -X POST -H "Authorization: token $env:GH_TOKEN" `
+  --resolve api.github.com:443:20.205.243.168 `
+  -H "Content-Type: application/json" `
+  https://api.github.com/user/keys -d $body
+
+# 推送
+cd e:\Git_PJ\MCU_TRACE
+.\push.bat
+```
+
+## 故障排查
+
+### `Permission denied (publickey)` 但 key 已加
+- 等 30 秒（GitHub key cache）
+- 确认公钥完整（`ssh-rsa` 前缀 + `mafuxuan@hangsheng.com.cn` 后缀）
+
+### `Connection reset by 127.0.0.1 port 8443`
+- GitHub 主 IP 段变了
+- 改 `tools/github_tunnel.py` 的 `TARGETS` 环境变量
+- 备用 IP：`140.82.114.4` `140.82.114.5` `140.82.112.3` `140.82.112.4`
+
+### `fatal: repository not found`
+- GitHub 上没创建仓库，回到 Step 2
 
 ## 推送成功后
 
-`git remote -v` 应该显示：
-```
-origin  git@github.com:mafuxuan/MCU_TRACE.git (fetch)
-origin  git@github.com:mafuxuan/MCU_TRACE.git (push)
-```
+```powershell
+git remote -v
+# origin  git@github.com:mafuxuan/MCU_TRACE.git (fetch)
+# origin  git@github.com:mafuxuan/MCU_TRACE.git (push)
 
-`git log --oneline` 显示：
-```
-1f6003a v0.2.2: 初始版本
+git log --oneline
+# 8761b1a feat: 公司网绕封 push 方案...
+# e99a357 chore: improve push.bat with network troubleshooting
+# ...
 ```
 
 ## 后续维护
 
-```bash
-# 修改文件后
-git add .
-git commit -m "describe change"
-git push origin main
+```powershell
+# 修改后
+git add . ; git commit -m "..." ; .\push.bat
 
-# 同步到 GitHub
+# 同步
 git pull origin main
 ```
 
-## 注意事项
+## 参考
 
-- `dist/`、`work/_e2e/`、`work/log_20260629_140253/`、`work/test_enc*/` 已被 `.gitignore` 排除
-  （这些是 build 产物和测试数据，太大不进仓）
-- `work/report.html` 和 `work/report.json` 保留（v0.2.2 E2E 验证产物）
-- 每次发版：打 tag 即可
-  ```bash
-  git tag v0.2.2 1f6003a
-  git push origin v0.2.2
-  ```
+- [E:\Git_PJ\CAN_LOG\HANDOVER.md §17 公司网绕封 GitHub push 方案](E:\Git_PJ\CAN_LOG\HANDOVER.md)
+- [tools/github_tunnel.py](tools/github_tunnel.py) — 70 行 raw TCP forward
+- [push.bat](push.bat) — 一键推送脚本
