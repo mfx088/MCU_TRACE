@@ -1,48 +1,59 @@
 @echo off
 REM ============================================================
-REM  MCU_TRACE 一键推送到 GitHub
+REM  MCU_TRACE 一键推送（公司网绕封 GitHub 方案）
 REM
-REM  ⚠️ 公司网封了 github.com，必须先切到手机热点！
-REM  参考: E:\Git_PJ\CAN_LOG\HANDOVER.md §12
+REM  原理：
+REM    - 启动本地 TCP tunnel (127.0.0.1:8443 -> GitHub IP:443)
+REM    - SSH config 已把 github.com 路由到 127.0.0.1:8443
+REM    - git push 走 SSH 协议经 tunnel 出去
+REM    - 推完自动关 tunnel
 REM
-REM  使用前提：
-REM    1. 手机开热点，电脑连上
-REM    2. GitHub 已加 SSH key (https://github.com/settings/keys)
-REM    3. GitHub 已创建空仓库 mafuxuan/MCU_TRACE (Private, 不要勾 README/.gitignore/license)
+REM  使用前提（只需 1 次）：
+REM    1. 在 GitHub 浏览器上 (https://github.com/settings/keys)
+REM       添加 ~/.ssh/id_rsa.pub 完整内容
+REM    2. 在 GitHub 浏览器上 (https://github.com/new)
+REM       创建空仓库 mafuxuan/MCU_TRACE (Private)
+REM       ⚠️ 不要勾选 Add README/.gitignore/license
+REM
+REM  之后每次推送只需运行本脚本即可。
 REM ============================================================
 
+setlocal enabledelayedexpansion
+
 echo.
 echo ============================================================
-echo  MCU_TRACE 一键推送到 GitHub
+echo  MCU_TRACE 一键推送 (via GitHub tunnel)
 echo ============================================================
 echo.
 
-echo [1/4] 检查 git 状态...
-git status --short
-git log --oneline >nul 2>&1
-if errorlevel 1 (
-    echo   [错误] 没有 commit
-    pause
-    exit /b 1
-)
+REM 启动 tunnel (后台)
+echo [1/4] 启动 GitHub tunnel...
+start "github_tunnel" /min python tools\github_tunnel.py
+timeout /t 2 /nobreak >nul
+echo    tunnel 已后台启动
 echo.
 
-echo [2/4] 测试 GitHub SSH 连接...
-ssh -T -o ConnectTimeout=5 -o BatchMode=yes git@github.com 2>&1
+REM 测试 SSH 连接
+echo [2/4] 测试 GitHub SSH 连接（应看到 "Hi mafuxuan! ..."）...
+ssh -T -o ConnectTimeout=10 git@github.com
 echo.
 
-echo [3/4] 检查 remote...
-git remote -v
-echo.
-
-echo [4/4] 推送到 origin/main...
+REM 推送
+echo [3/4] 推送到 origin/main...
 git push -u origin main
-if errorlevel 1 (
+set PUSH_ERR=%errorlevel%
+
+REM 关闭 tunnel
+echo.
+echo [4/4] 关闭 tunnel...
+taskkill /F /FI "WINDOWTITLE eq github_tunnel*" 2>nul
+
+if %PUSH_ERR% neq 0 (
     echo.
     echo   [错误] 推送失败！可能原因：
-    echo     1. 还在公司网 (切到手机热点重试)
-    echo     2. GitHub 仓库未创建 (https://github.com/new)
-    echo     3. SSH key 未添加 (https://github.com/settings/keys)
+    echo     1. GitHub 仓库未创建 (https://github.com/new)
+    echo     2. SSH key 未添加到 GitHub (https://github.com/settings/keys)
+    echo     3. tunnel 连接失败（IP 段可能变化）
     echo.
     echo   详细: GITHUB_SETUP.md
     pause
